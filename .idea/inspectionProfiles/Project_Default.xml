@@ -1,0 +1,92 @@
+<component name="InspectionProjectProfileManager">
+  <profile version="1.0">
+    <option name="myName" value="Project Default" />
+    <inspection_tool class="PyCompatibilityInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ourVersions">
+        <value>
+          <list size="1">
+            <item index="0" class="java.lang.String" itemvalue="3.13" />
+          </list>
+        </value>
+      </option>
+    </inspection_tool>
+    <inspection_tool class="PyPackageRequirementsInspection" enabled="true" level="WARNING" enabled_by_default="true">
+      <option name="ignoredPackages">
+        <list>
+          <option value="annotated-types" />
+          <option value="anyio" />
+          <option value="babel" />
+          <option value="beautifulsoup4" />
+          <option value="build" />
+          <option value="cachetools" />
+          <option value="certifi" />
+          <option value="charset-normalizer" />
+          <option value="click" />
+          <option value="colorama" />
+          <option value="courlan" />
+          <option value="dateparser" />
+          <option value="distro" />
+          <option value="filelock" />
+          <option value="google-api-core" />
+          <option value="google-auth" />
+          <option value="google-cloud-core" />
+          <option value="google-cloud-storage" />
+          <option value="google-crc32c" />
+          <option value="google-resumable-media" />
+          <option value="googleapis-common-protos" />
+          <option value="greenlet" />
+          <option value="h11" />
+          <option value="htmldate" />
+          <option value="httpcore" />
+          <option value="httpx" />
+          <option value="idna" />
+          <option value="jiter" />
+          <option value="lxml" />
+          <option value="mylogger" />
+          <option value="numpy" />
+          <option value="openai" />
+          <option value="openpyxl" />
+          <option value="orjson" />
+          <option value="packaging" />
+          <option value="pandas" />
+          <option value="pandas-stubs" />
+          <option value="phonenumberslite" />
+          <option value="pip-tools" />
+          <option value="playwright" />
+          <option value="proto-plus" />
+          <option value="protobuf" />
+          <option value="pyasn1" />
+          <option value="pydantic" />
+          <option value="pyee" />
+          <option value="python-dateutil" />
+          <option value="pytz" />
+          <option value="regex" />
+          <option value="requests" />
+          <option value="requests-file" />
+          <option value="rsa" />
+          <option value="setuptools" />
+          <option value="six" />
+          <option value="sniffio" />
+          <option value="soupsieve" />
+          <option value="tld" />
+          <option value="tldextract" />
+          <option value="tqdm" />
+          <option value="trafilatura" />
+          <option value="typing-inspection" />
+          <option value="tzdata" />
+          <option value="tzlocal" />
+          <option value="urllib3" />
+          <option value="wheel" />
+          <option value="xlrd" />
+          <option value="et_xmlfile" />
+          <option value="jusText" />
+          <option value="lxml_html_clean" />
+          <option value="pyasn1_modules" />
+          <option value="pydantic_core" />
+          <option value="pyproject_hooks" />
+          <option value="typing_extensions" />
+        </list>
+      </option>
+    </inspection_tool>
+  </profile>
+</component>

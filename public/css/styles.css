@@ -1,0 +1,75 @@
+/* Blueboot Support — global styles */
+/* Uses Bootstrap 5 + Tabler Icons. Custom rules only where Bootstrap can't cover it. */
+
+:root {
+  --bb-indigo: #4f46e5;
+  --bb-indigo-light: #f0efff;
+  --bb-dark: #1a1a2e;
+  --bb-radius: 10px;
+}
+
+/* ── Layout ──────────────────────────────────────────────────────────────── */
+.bb-app { background: #f4f5f7; min-height: 100vh; }
+.bb-login-page { background: #f4f5f7; }
+
+/* ── Navbar ──────────────────────────────────────────────────────────────── */
+.bb-navbar { background: var(--bb-dark); border-bottom: 1px solid rgba(255,255,255,.08); }
+.bb-brand { color: #fff !important; font-weight: 600; font-size: 1rem; text-decoration: none; display: flex; align-items: center; }
+
+/* ── Login card ──────────────────────────────────────────────────────────── */
+.bb-login-card { background: #fff; border-radius: var(--bb-radius); padding: 2rem; width: 100%; max-width: 380px; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
+.bb-brand-icon { width: 52px; height: 52px; background: var(--bb-indigo); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: #fff; }
+
+/* ── Stat cards ──────────────────────────────────────────────────────────── */
+.bb-stat-card { background: #fff; border-radius: var(--bb-radius); padding: 1rem 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+.bb-stat-label { font-size: .75rem; color: #6b7280; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .25rem; }
+.bb-stat-value { font-size: 1.75rem; font-weight: 700; line-height: 1; }
+
+/* ── Filter card ─────────────────────────────────────────────────────────── */
+.bb-filter-card { border: none; box-shadow: 0 1px 4px rgba(0,0,0,.06); border-radius: var(--bb-radius); }
+
+/* ── Table card ──────────────────────────────────────────────────────────── */
+.bb-table-card { border: none; box-shadow: 0 1px 4px rgba(0,0,0,.06); border-radius: var(--bb-radius); overflow: hidden; }
+.bb-table { font-size: .875rem; }
+.bb-thead { background: #f9fafb; }
+.bb-thead th { font-size: .72rem; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid #e5e7eb; padding: .625rem 1rem; }
+.bb-table td { padding: .75rem 1rem; vertical-align: middle; border-bottom: 1px solid #f3f4f6; }
+.bb-row:last-child td { border-bottom: none; }
+.bb-row:hover td { background: #fafafa; }
+.bb-case-id { font-weight: 600; color: var(--bb-indigo); font-size: .85rem; }
+.bb-subject { font-weight: 500; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Status badges ───────────────────────────────────────────────────────── */
+.badge { font-size: .72rem; font-weight: 500; padding: .3em .6em; border-radius: 20px; }
+.bb-badge-danger    { background: #fee2e2; color: #991b1b; }
+.bb-badge-warning   { background: #fef3c7; color: #92400e; }
+.bb-badge-success   { background: #d1fae5; color: #065f46; }
+.bb-badge-secondary { background: #f3f4f6; color: #374151; }
+
+/* ── Case header card ────────────────────────────────────────────────────── */
+.bb-case-header-card { border: none; box-shadow: 0 1px 4px rgba(0,0,0,.06); border-radius: var(--bb-radius); }
+.bb-case-number { font-size: .85rem; font-weight: 700; color: var(--bb-indigo); text-transform: uppercase; letter-spacing: .04em; }
+.bb-status-select { max-width: 130px; font-size: .85rem; }
+.bb-assign-select { max-width: 160px; font-size: .85rem; }
+
+/* ── Message thread ──────────────────────────────────────────────────────── */
+.bb-thread { display: flex; flex-direction: column; gap: .75rem; }
+.bb-msg { border-radius: var(--bb-radius); padding: 1rem 1.125rem; max-width: 100%; }
+.bb-msg-in  { background: #fff; border: 1px solid #e5e7eb; border-left: 3px solid var(--bb-indigo); }
+.bb-msg-out { background: var(--bb-indigo-light); border: 1px solid #ddd9ff; border-left: 3px solid #a78bfa; }
+.bb-msg-header { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-bottom: .5rem; }
+.bb-msg-sender { font-weight: 600; font-size: .85rem; }
+.bb-msg-from { font-size: .8rem; color: #6b7280; }
+.bb-msg-time { font-size: .78rem; color: #9ca3af; margin-left: auto; }
+.bb-msg-body { font-size: .875rem; line-height: 1.65; color: #374151; white-space: pre-wrap; word-break: break-word; }
+.bb-auto-badge { font-size: .68rem; background: #e0e7ff; color: #3730a3; border-radius: 20px; padding: .15em .5em; font-weight: 500; }
+
+/* ── Reply card ──────────────────────────────────────────────────────────── */
+.bb-reply-card { border: none; box-shadow: 0 1px 4px rgba(0,0,0,.06); border-radius: var(--bb-radius); }
+.bb-reply-textarea { resize: vertical; font-size: .875rem; }
+
+/* ── Buttons ─────────────────────────────────────────────────────────────── */
+.bb-btn-primary { background: var(--bb-indigo); color: #fff; border: none; font-size: .875rem; }
+.bb-btn-primary:hover { background: #4338ca; color: #fff; }
+.bb-btn-outline { background: transparent; border: 1px solid #d1d5db; color: #374151; font-size: .875rem; }
+.bb-btn-outline:hover { background: #f3f4f6; }

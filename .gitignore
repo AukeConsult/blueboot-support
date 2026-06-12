@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+
+# Firebase
+.firebase/
+firebase-debug.log
+.firebaserc.local
+
+# Secrets
+.env
+*.env.local
+serviceAccountKey.json
+*secrets.py
+
+# OS
+.DS_Store
+Thumbs.db

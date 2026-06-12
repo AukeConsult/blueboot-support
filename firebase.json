@@ -1,0 +1,15 @@
+{
+  "hosting": {
+    "site": "blueboot-support",
+    "public": "public",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
+  },
+  "functions": [
+    {
+      "codebase": "support",
+      "source": "functions-support",
+      "runtime": "python312",
+      "ignore": ["venv", ".venv", "**/__pycache__/**", ".env"]
+    }
+  ]
+}
