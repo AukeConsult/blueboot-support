@@ -25,7 +25,18 @@ def _get_db():
         if _db is not None:
             return _db
         if not firebase_admin._apps:
-            cred = credentials.ApplicationDefault()
+            # Local dev: load credentials dict from blueboot-support.secrets.py
+            # Production (Cloud Functions): falls back to ApplicationDefault
+            try:
+                _secrets_path = os.path.abspath(
+                    os.path.join(os.path.dirname(__file__), "..", "..", "blueboot-support.secrets.py")
+                )
+                _cfg: dict = {}
+                with open(_secrets_path, encoding="utf-8") as _f:
+                    exec(compile(_f.read(), _secrets_path, "exec"), _cfg)
+                cred = credentials.Certificate(_cfg["FIREBASE_CREDENTIALS"])
+            except Exception:
+                cred = credentials.ApplicationDefault()
             firebase_admin.initialize_app(cred, {"projectId": GCP_PROJECT})
         _db = fs.client()
     return _db

@@ -11,11 +11,15 @@ venv/
 firebase-debug.log
 .firebaserc.local
 
-# Secrets
+# Secrets — never commit
+blueboot-support.secrets.py
+*secrets*.py
 .env
 *.env.local
 serviceAccountKey.json
-*secrets.py
+
+# Frontend config with real values
+public/js/firebase-config.js
 
 # OS
 .DS_Store

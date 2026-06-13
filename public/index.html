@@ -29,7 +29,7 @@
 <main class="container-fluid px-4 py-4">
 
   <!-- Stats row -->
-  <div class="row g-3 mb-4" id="stats-row">
+  <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
       <div class="bb-stat-card">
         <div class="bb-stat-label">Open</div>
@@ -50,8 +50,8 @@
     </div>
     <div class="col-6 col-md-3">
       <div class="bb-stat-card">
-        <div class="bb-stat-label">Total</div>
-        <div class="bb-stat-value" id="stat-total">—</div>
+        <div class="bb-stat-label">Overdue</div>
+        <div class="bb-stat-value text-danger" id="stat-overdue">—</div>
       </div>
     </div>
   </div>
@@ -61,9 +61,10 @@
     <div class="card-body py-2 px-3">
       <div class="row g-2 align-items-center">
         <div class="col-12 col-md-4">
-          <input type="search" id="search-input" class="form-control form-control-sm" placeholder="Search subject or email…">
+          <input type="search" id="search-input" class="form-control form-control-sm"
+                 placeholder="Search subject or email…">
         </div>
-        <div class="col-6 col-md-3">
+        <div class="col-6 col-md-2">
           <select id="filter-status" class="form-select form-select-sm">
             <option value="">All statuses</option>
             <option value="open">Open</option>
@@ -72,12 +73,20 @@
             <option value="closed">Closed</option>
           </select>
         </div>
-        <div class="col-6 col-md-3">
+        <div class="col-6 col-md-2">
+          <select id="filter-priority" class="form-select form-select-sm">
+            <option value="">All priorities</option>
+            <option value="high">High</option>
+            <option value="normal">Normal</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
           <select id="filter-account" class="form-select form-select-sm">
             <option value="">All accounts</option>
           </select>
         </div>
-        <div class="col-12 col-md-2 text-md-end">
+        <div class="col-6 col-md-2 text-md-end">
           <span id="case-count" class="small text-muted"></span>
         </div>
       </div>
@@ -96,14 +105,15 @@
             <tr>
               <th style="width:90px">Case</th>
               <th>Subject</th>
-              <th style="width:200px">From</th>
+              <th style="width:180px;min-width:140px">From</th>
               <th style="width:110px">Status</th>
+              <th style="width:80px">Priority</th>
               <th style="width:130px">Last activity</th>
-              <th style="width:150px">Mail account</th>
+              <th style="width:170px">Mail account</th>
             </tr>
           </thead>
           <tbody id="cases-tbody">
-            <tr><td colspan="6" class="text-center text-muted py-5">Loading…</td></tr>
+            <tr><td colspan="7" class="text-center text-muted py-5">Loading…</td></tr>
           </tbody>
         </table>
       </div>
@@ -113,35 +123,27 @@
 
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="js/firebase-config.js"></script>
 <script>
-const FIREBASE_CONFIG = {
-  apiKey:            "AIzaSyXXXXXXXXXXXXXXXXXX",
-  authDomain:        "blueboot-market.firebaseapp.com",
-  projectId:         "blueboot-market",
-  storageBucket:     "blueboot-market.appspot.com",
-  messagingSenderId: "XXXXXXXXXXXX",
-  appId:             "1:XXXXXXXXXXXX:web:XXXXXXXXXXXX",
-};
-const API = "https://us-central1-blueboot-market.cloudfunctions.net/supportApi";
-
-firebase.initializeApp(FIREBASE_CONFIG);
+const API = window.SUPPORT_API;
+firebase.initializeApp(window.FIREBASE_CONFIG);
 const auth = firebase.auth();
 
-let _token = null;
 let _cases = [];
 
 async function getToken() {
-  const user = auth.currentUser;
-  if (!user) return null;
-  _token = await user.getIdToken();
-  return _token;
+  return auth.currentUser ? auth.currentUser.getIdToken() : null;
 }
 
 async function fetchJSON(path, opts = {}) {
   const token = await getToken();
   const res = await fetch(API + path, {
     ...opts,
-    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json", ...(opts.headers || {}) },
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type":  "application/json",
+      ...(opts.headers || {}),
+    },
   });
   if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
   return res.json();
@@ -155,57 +157,74 @@ function setFeedback(msg, type) {
   fb.classList.remove("d-none");
 }
 
+function escHtml(s) {
+  return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
 function statusBadge(s) {
   const map = {
-    open: ["danger", "Open"],
-    in_progress: ["warning", "In Progress"],
-    resolved: ["success", "Resolved"],
-    closed: ["secondary", "Closed"],
+    open:        ["danger",    "Open"],
+    in_progress: ["warning",   "In Progress"],
+    resolved:    ["success",   "Resolved"],
+    closed:      ["secondary", "Closed"],
   };
-  const [cls, label] = map[s] || ["secondary", s];
+  const [cls, label] = map[s] || ["secondary", s || "—"];
   return `<span class="badge bb-badge-${cls}">${label}</span>`;
+}
+
+function priorityBadge(p) {
+  const map = { high: "danger", normal: "secondary", low: "info" };
+  const cls = map[p] || "secondary";
+  return `<span class="badge bb-badge-${cls}">${p || "normal"}</span>`;
 }
 
 function relTime(iso) {
   if (!iso) return "—";
   const d = Math.floor((Date.now() - new Date(iso)) / 1000);
   if (d < 60) return "just now";
-  if (d < 3600) return `${Math.floor(d/60)}m ago`;
-  if (d < 86400) return `${Math.floor(d/3600)}h ago`;
-  return `${Math.floor(d/86400)}d ago`;
+  if (d < 3600)  return `${Math.floor(d / 60)}m ago`;
+  if (d < 86400) return `${Math.floor(d / 3600)}h ago`;
+  return `${Math.floor(d / 86400)}d ago`;
 }
 
 function renderCases(cases) {
   const tbody = document.getElementById("cases-tbody");
-  document.getElementById("case-count").textContent = `${cases.length} case${cases.length !== 1 ? "s" : ""}`;
+  document.getElementById("case-count").textContent =
+    `${cases.length} case${cases.length !== 1 ? "s" : ""}`;
   if (!cases.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-5">No cases found</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-5">No cases found</td></tr>`;
     return;
   }
   tbody.innerHTML = cases.map(c => `
-    <tr class="bb-row" onclick="window.location='case_detail.html?id=${c.id}'" style="cursor:pointer">
+    <tr class="bb-row" onclick="window.location='case_detail.html?id=${encodeURIComponent(c.id)}'"
+        style="cursor:pointer">
       <td><span class="bb-case-id">Case ${c.case_id || c.id}</span></td>
       <td class="bb-subject">${escHtml(c.subject || "(no subject)")}</td>
-      <td class="text-truncate" style="max-width:200px" title="${escHtml(c.from_email || "")}">${escHtml(c.from_name || c.from_email || "—")}<br><small class="text-muted">${escHtml(c.from_email || "")}</small></td>
+      <td style="width:180px;min-width:140px">
+        ${escHtml(c.from_name || c.from_email || "—")}<br>
+        <small class="text-muted">${escHtml(c.from_email || "")}</small>
+      </td>
       <td>${statusBadge(c.status)}</td>
-      <td class="small text-muted">${relTime(c.last_message_at || c.updated_at)}</td>
-      <td class="small text-muted text-truncate" style="max-width:150px">${escHtml(c.mail_account || "—")}</td>
+      <td>${priorityBadge(c.priority)}</td>
+      <td class="small text-muted">${relTime(c.last_history_at || c.updated_at)}</td>
+      <td class="small text-muted text-truncate" style="max-width:170px">
+        ${escHtml(c.mail_account || "—")}
+      </td>
     </tr>
   `).join("");
-}
-
-function escHtml(s) {
-  return (s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
 function applyFilters() {
   const q  = document.getElementById("search-input").value.trim().toLowerCase();
   const st = document.getElementById("filter-status").value;
+  const pr = document.getElementById("filter-priority").value;
   const ac = document.getElementById("filter-account").value;
   renderCases(_cases.filter(c =>
     (!st || c.status === st) &&
+    (!pr || (c.priority || "normal") === pr) &&
     (!ac || c.mail_account === ac) &&
-    (!q  || (c.subject || "").toLowerCase().includes(q) || (c.from_email || "").toLowerCase().includes(q))
+    (!q  || (c.subject || "").toLowerCase().includes(q) ||
+             (c.from_email || "").toLowerCase().includes(q))
   ));
 }
 
@@ -215,8 +234,8 @@ async function loadStats() {
     document.getElementById("stat-open").textContent      = s.open        ?? 0;
     document.getElementById("stat-inprogress").textContent = s.in_progress ?? 0;
     document.getElementById("stat-resolved").textContent  = s.resolved     ?? 0;
-    document.getElementById("stat-total").textContent     = s.total        ?? 0;
-  } catch (e) { /* non-fatal */ }
+    document.getElementById("stat-overdue").textContent   = s.overdue      ?? 0;
+  } catch (_) { /* non-fatal */ }
 }
 
 async function loadCases() {
@@ -224,9 +243,10 @@ async function loadCases() {
     const data = await fetchJSON("/api/support/cases?limit=200");
     _cases = data.cases || [];
 
-    // Populate account filter
     const accounts = [...new Set(_cases.map(c => c.mail_account).filter(Boolean))];
     const acSel = document.getElementById("filter-account");
+    // Reset and rebuild
+    while (acSel.options.length > 1) acSel.remove(1);
     accounts.forEach(a => {
       const opt = document.createElement("option");
       opt.value = a; opt.textContent = a;
@@ -236,7 +256,7 @@ async function loadCases() {
     applyFilters();
   } catch (e) {
     document.getElementById("cases-tbody").innerHTML =
-      `<tr><td colspan="6" class="text-center text-danger py-4">${escHtml(e.message)}</td></tr>`;
+      `<tr><td colspan="7" class="text-center text-danger py-4">${escHtml(e.message)}</td></tr>`;
   }
 }
 
@@ -247,9 +267,12 @@ async function checkMail() {
   setFeedback('<i class="ti ti-refresh me-1"></i>Checking mail…', "info");
   try {
     const r = await fetchJSON("/api/support/check-mail", { method: "POST" });
-    setFeedback(`<i class="ti ti-check me-1"></i>Done — ${r.new_cases} new cases, ${r.appended} appended.`, "success");
-    await loadCases();
-    await loadStats();
+    setFeedback(
+      `<i class="ti ti-check me-1"></i>Done — ${r.new_cases} new case${r.new_cases !== 1 ? "s" : ""}, ` +
+      `${r.appended} message${r.appended !== 1 ? "s" : ""} appended.`,
+      "success"
+    );
+    await Promise.all([loadCases(), loadStats()]);
   } catch (e) {
     setFeedback(`<i class="ti ti-circle-x me-1"></i>${escHtml(e.message)}`, "danger");
   } finally {
@@ -264,10 +287,11 @@ auth.onAuthStateChanged(async user => {
   await Promise.all([loadStats(), loadCases()]);
 });
 
-document.getElementById("logout-btn").onclick = () => auth.signOut().then(() => window.location.href = "login.html");
-document.getElementById("check-btn").onclick  = checkMail;
-document.getElementById("search-input").addEventListener("input", applyFilters);
+document.getElementById("logout-btn").onclick        = () => auth.signOut().then(() => { window.location.href = "login.html"; });
+document.getElementById("check-btn").onclick         = checkMail;
+document.getElementById("search-input").addEventListener("input",  applyFilters);
 document.getElementById("filter-status").addEventListener("change", applyFilters);
+document.getElementById("filter-priority").addEventListener("change", applyFilters);
 document.getElementById("filter-account").addEventListener("change", applyFilters);
 </script>
 </body>

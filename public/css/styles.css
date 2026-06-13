@@ -73,3 +73,40 @@
 .bb-btn-primary:hover { background: #4338ca; color: #fff; }
 .bb-btn-outline { background: transparent; border: 1px solid #d1d5db; color: #374151; font-size: .875rem; }
 .bb-btn-outline:hover { background: #f3f4f6; }
+
+/* ── Info badge (low priority) ───────────────────────────────────────────── */
+.bb-badge-info { background: #dbeafe; color: #1e40af; }
+
+/* ── Composer tabs ───────────────────────────────────────────────────────── */
+.bb-composer-tabs .nav-link { font-size: .85rem; color: #6b7280; padding: .4rem .75rem; }
+.bb-composer-tabs .nav-link.active { color: var(--bb-indigo); font-weight: 600; }
+
+/* ── Timeline action events (system/audit log items) ─────────────────────── */
+.bb-action-event {
+  font-size: .8rem;
+  color: #6b7280;
+  padding: .35rem .75rem;
+  background: #f9fafb;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .25rem;
+  align-self: center;
+  max-width: 100%;
+}
+.bb-action-event .ti { color: #9ca3af; }
+.bb-event-by  { color: #9ca3af; }
+.bb-event-time { color: #d1d5db; margin-left: auto; white-space: nowrap; }
+
+/* ── Internal note ───────────────────────────────────────────────────────── */
+.bb-note-event {
+  font-size: .82rem;
+  color: #374151;
+  padding: .75rem 1rem;
+  background: #fffbeb;
+  border: 1px dashed #fcd34d;
+  border-radius: var(--bb-radius);
+}
+.bb-note-by   { font-weight: 600; }
+.bb-note-body { font-size: .875rem; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
