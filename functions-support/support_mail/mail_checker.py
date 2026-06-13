@@ -25,8 +25,7 @@ from email import message_from_bytes
 from email.header import decode_header
 from email.utils import parsedate_to_datetime
 
-from support_mail.templates import auto_reply_html, auto_reply_text
-from support_mail.reply_sender import send_reply_email
+# auto_reply disabled — templates/sender used by cases.py for manual replies
 
 _SMTP_PORTS   = {25, 465, 587, 2525}
 _CASE_RE      = re.compile(r"\bCase\s+(\d+)\b", re.IGNORECASE)
@@ -215,6 +214,29 @@ def _already_processed(db, msg_id_key: str) -> bool:
     return db.collection("support_email_index").document(msg_id_key).get().exists
 
 
+def _find_active_case_by_sender(db, acc_email: str, from_addr: str, dedup_days: int):
+    """Return (case_ref, case_dict) of the most recent active case from this sender
+    within dedup_days, or (None, None). Queries in Python to avoid extra index."""
+    cutoff   = (datetime.now(timezone.utc) - timedelta(days=dedup_days)).isoformat()
+    inactive = {"resolved", "closed"}
+    docs = list(
+        db.collection("support_mail_accounts")
+          .document(acc_email)
+          .collection("cases")
+          .where("from_email", "==", from_addr)
+          .stream()
+    )
+    active = []
+    for d in docs:
+        c = d.to_dict() or {}
+        if c.get("status") not in inactive and c.get("updated_at", "") >= cutoff:
+            active.append((d, c))
+    if not active:
+        return None, None
+    active.sort(key=lambda x: x[1].get("updated_at", ""), reverse=True)
+    return active[0][0].reference, active[0][1]
+
+
 def _mark_processed(db, msg_id_key: str, case_id: int,
                     account: str, direction: str) -> None:
     db.collection("support_email_index").document(msg_id_key).set({
@@ -227,8 +249,11 @@ def _mark_processed(db, msg_id_key: str, case_id: int,
 
 # ── Main entry point ──────────────────────────────────────────────────────────
 
-def run_mail_check(db, account_email: str | None = None, days: int = 7) -> dict:
-    """Check INBOX of each mail account (SINCE, not UNSEEN) and create/update cases."""
+def run_mail_check(db, account_email: str | None = None, days: int = 7, dry_run: bool = False, dedup_days: int = 15) -> dict:
+    """Check INBOX of each mail account (SINCE, not UNSEEN) and create/update cases.
+    dry_run=True: connects and reads IMAP but writes nothing to Firestore and sends no emails.
+    dedup_days: if a non-resolved case from the same sender exists within this window, append to it.
+    """
     now   = datetime.now(timezone.utc)
     since = now - timedelta(days=days)
 
@@ -269,7 +294,10 @@ def run_mail_check(db, account_email: str | None = None, days: int = 7) -> dict:
 
         for msg in msgs:
             mid_key = _msg_id_key(msg["message_id"])
-            if _already_processed(db, mid_key):
+            if not dry_run and _already_processed(db, mid_key):
+                continue
+            if dry_run and _already_processed(db, mid_key):
+                print(f"[dry-run]   SKIP (already processed): {msg['subject'][:60]}", flush=True)
                 continue
 
             from_addr = _extract_email(msg["from"])
@@ -284,33 +312,70 @@ def run_mail_check(db, account_email: str | None = None, days: int = 7) -> dict:
                 if not ref.get().exists:
                     case_match = None   # case not found — fall through to new case
                 else:
-                    now_iso = now.isoformat()
-                    ref.collection("history").document().set({
-                        "type":          "EMAIL_IN",
-                        "from_email":    from_addr,
-                        "to_email":      acc_email,
-                        "subject":       subject,
-                        "body":          msg["body"],
-                        "is_auto_reply": False,
-                        "email_id":      mid_key,
-                        "timestamp":     msg["date"],
-                    })
-                    ref.update({
-                        "updated_at":              now_iso,
-                        "last_history_at":         msg["date"],
-                        "last_history_direction":  "IN",
-                        "status":                  "open",   # re-open if resolved
-                    })
-                    _log_action(ref, "email_received", by=from_addr)
-                    _mark_processed(db, mid_key, case_id_int, acc_email, "IN")
+                    if dry_run:
+                        print(f"[dry-run]   WOULD append to Case {case_id_int}: {subject[:60]}", flush=True)
+                    else:
+                        now_iso = now.isoformat()
+                        ref.collection("history").document().set({
+                            "type":          "EMAIL_IN",
+                            "from_email":    from_addr,
+                            "to_email":      acc_email,
+                            "subject":       subject,
+                            "body":          msg["body"],
+                            "is_auto_reply": False,
+                            "email_id":      mid_key,
+                            "timestamp":     msg["date"],
+                        })
+                        ref.update({
+                            "updated_at":              now_iso,
+                            "last_history_at":         msg["date"],
+                            "last_history_direction":  "IN",
+                            "status":                  "new",   # re-open if resolved
+                        })
+                        _log_action(ref, "email_received", by=from_addr)
+                        _mark_processed(db, mid_key, case_id_int, acc_email, "IN")
                     appended += 1
                     print(f"[support-mail]   appended to Case {case_id_int}", flush=True)
 
             if not case_match:
+                # ── Dedup: check for active case from same sender ─────────
+                dedup_ref, dedup_case = _find_active_case_by_sender(db, acc_email, from_addr, dedup_days)
+                if dedup_case is not None:
+                    case_id_int = dedup_case.get("case_id")
+                    if dry_run:
+                        print(f"[dry-run]   WOULD merge into Case {case_id_int} (same sender): {subject[:60]}", flush=True)
+                    else:
+                        now_iso = now.isoformat()
+                        dedup_ref.collection("history").document().set({
+                            "type":          "EMAIL_IN",
+                            "from_email":    from_addr,
+                            "to_email":      acc_email,
+                            "subject":       subject,
+                            "body":          msg["body"],
+                            "is_auto_reply": False,
+                            "email_id":      mid_key,
+                            "timestamp":     msg["date"],
+                        })
+                        dedup_ref.update({
+                            "updated_at":             now.isoformat(),
+                            "last_history_at":        msg["date"],
+                            "last_history_direction": "IN",
+                            "status":                 "new",
+                        })
+                        _log_action(dedup_ref, "email_received", by=from_addr, note="merged (same sender)")
+                        _mark_processed(db, mid_key, case_id_int, acc_email, "IN")
+                    appended += 1
+                    print(f"[support-mail]   merged into Case {case_id_int} (same sender dedup)", flush=True)
+                    continue
+
                 # ── Create new case ───────────────────────────────────────
                 try:
+                    priority = _detect_priority(subject, msg["body"])
+                    if dry_run:
+                        print(f"[dry-run]   WOULD create new case ({priority}): {subject[:60]}", flush=True)
+                        new_cases += 1
+                        continue
                     case_id_int = _next_case_id(db)
-                    priority    = _detect_priority(subject, msg["body"])
                     now_iso     = now.isoformat()
                     sla_iso     = (now + timedelta(hours=24)).isoformat()
 
@@ -321,7 +386,7 @@ def run_mail_check(db, account_email: str | None = None, days: int = 7) -> dict:
                         "subject":               subject,
                         "from_email":            from_addr,
                         "from_name":             from_name,
-                        "status":                "open",
+                        "status":                "new",
                         "priority":              priority,
                         "tags":                  [],
                         "assigned_to":           None,
@@ -351,30 +416,8 @@ def run_mail_check(db, account_email: str | None = None, days: int = 7) -> dict:
                     new_cases += 1
                     print(f"[support-mail]   created Case {case_id_int} ({priority}): {subject[:60]}", flush=True)
 
-                    # Auto-reply
-                    reply_subj = f"RE: Case {case_id_int}: {subject}"
-                    html_body  = auto_reply_html(case_id_int, subject, from_name)
-                    text_body  = auto_reply_text(case_id_int, subject)
-                    try:
-                        send_reply_email(db, acc_email, from_addr, reply_subj, text_body, html_body)
-                        auto_now = datetime.now(timezone.utc).isoformat()
-                        ref.collection("history").document().set({
-                            "type":          "EMAIL_OUT",
-                            "from_email":    acc_email,
-                            "to_email":      from_addr,
-                            "subject":       reply_subj,
-                            "body":          text_body,
-                            "is_auto_reply": True,
-                            "timestamp":     auto_now,
-                        })
-                        ref.update({
-                            "last_history_at":        auto_now,
-                            "last_history_direction": "OUT",
-                        })
-                        _log_action(ref, "auto_replied", by="system")
-                        print(f"[support-mail]   auto-reply sent to {from_addr}", flush=True)
-                    except Exception as exc:
-                        errors.append(f"Case {case_id_int} auto-reply failed: {exc}")
+                    # Auto-reply disabled — agent replies manually from the board
+                    print(f"[support-mail]   case {case_id_int} awaiting manual reply", flush=True)
 
                 except Exception as exc:
                     errors.append(f"Case create failed for {from_addr}: {exc}")

@@ -20,8 +20,12 @@ def check_mail():
         account = request.args.get("account") or None
         days    = int(request.args.get("days", 7))
 
+        # Read dedup_days from Firestore settings (configurable without redeploy)
+        meta_snap  = db.collection("settings").document("support_meta").get()
+        dedup_days = int((meta_snap.to_dict() or {}).get("dedup_days", 15))
+
         from support_mail.mail_checker import run_mail_check
-        result = run_mail_check(db, account_email=account, days=days)
+        result = run_mail_check(db, account_email=account, days=days, dedup_days=dedup_days)
         return _ok("Mail check complete", **result)
     except Exception as exc:
         return _err(str(exc), 500)

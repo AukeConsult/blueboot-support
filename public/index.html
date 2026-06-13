@@ -17,11 +17,11 @@
       <i class="ti ti-headset me-2" aria-hidden="true"></i>Support
     </a>
     <div class="ms-auto d-flex align-items-center gap-3">
-      <span id="user-email" class="small text-muted"></span>
-      <button id="check-btn" class="btn btn-sm bb-btn-outline">
+      <span id="user-email" class="small" style="color:rgba(255,255,255,0.6)"></span>
+      <button id="check-btn" class="btn btn-sm bb-btn-outline-light">
         <i class="ti ti-refresh me-1" aria-hidden="true"></i>Check mail
       </button>
-      <button id="logout-btn" class="btn btn-sm btn-link text-muted p-0">Sign out</button>
+      <button id="logout-btn" class="btn btn-sm btn-link p-0" style="color:rgba(255,255,255,0.5)">Sign out</button>
     </div>
   </div>
 </nav>
@@ -67,8 +67,10 @@
         <div class="col-6 col-md-2">
           <select id="filter-status" class="form-select form-select-sm">
             <option value="">All statuses</option>
-            <option value="open">Open</option>
-            <option value="in_progress">In Progress</option>
+            <option value="new">New</option>
+            <option value="replied">Replied</option>
+            <option value="follow_up">Follow Up</option>
+            <option value="not_interested">Not Interested</option>
             <option value="resolved">Resolved</option>
             <option value="closed">Closed</option>
           </select>
@@ -109,7 +111,7 @@
               <th style="width:110px">Status</th>
               <th style="width:80px">Priority</th>
               <th style="width:130px">Last activity</th>
-              <th style="width:170px">Mail account</th>
+              <th style="width:200px">Actions</th>
             </tr>
           </thead>
           <tbody id="cases-tbody">
@@ -163,10 +165,12 @@ function escHtml(s) {
 
 function statusBadge(s) {
   const map = {
-    open:        ["danger",    "Open"],
-    in_progress: ["warning",   "In Progress"],
-    resolved:    ["success",   "Resolved"],
-    closed:      ["secondary", "Closed"],
+    new:            ["new",            "New"],
+    replied:        ["replied",        "Replied"],
+    follow_up:      ["follow_up",      "Follow Up"],
+    not_interested: ["not_interested", "Not Interested"],
+    resolved:       ["resolved",       "Resolved"],
+    closed:         ["closed",         "Closed"],
   };
   const [cls, label] = map[s] || ["secondary", s || "—"];
   return `<span class="badge bb-badge-${cls}">${label}</span>`;
@@ -207,8 +211,18 @@ function renderCases(cases) {
       <td>${statusBadge(c.status)}</td>
       <td>${priorityBadge(c.priority)}</td>
       <td class="small text-muted">${relTime(c.last_history_at || c.updated_at)}</td>
-      <td class="small text-muted text-truncate" style="max-width:170px">
-        ${escHtml(c.mail_account || "—")}
+      <td onclick="event.stopPropagation()">
+        <div class="bb-quick-actions">
+          <button class="bb-quick-btn reply" onclick="quickReply('${c.id}','${escHtml(c.subject||'')}')">
+            <i class="ti ti-send" style="font-size:.7rem"></i> Reply
+          </button>
+          <button class="bb-quick-btn fu" onclick="quickStatus('${c.id}','follow_up')">
+            Follow Up
+          </button>
+          <button class="bb-quick-btn ni" onclick="quickStatus('${c.id}','not_interested')">
+            Not Interested
+          </button>
+        </div>
       </td>
     </tr>
   `).join("");
@@ -279,6 +293,26 @@ async function checkMail() {
     btn.disabled = false;
     btn.innerHTML = '<i class="ti ti-refresh me-1"></i>Check mail';
   }
+}
+
+async function quickStatus(caseId, status) {
+  try {
+    const token = await getToken();
+    await fetch(API + `/api/support/cases/${caseId}`, {
+      method: "PATCH",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    setFeedback(`<i class="ti ti-check me-1"></i>Status updated to <b>${status.replace(/_/g,' ')}</b>`, "success");
+    await Promise.all([loadCases(), loadStats()]);
+    setTimeout(() => setFeedback(null), 2500);
+  } catch (e) {
+    setFeedback(`<i class="ti ti-circle-x me-1"></i>${escHtml(e.message)}`, "danger");
+  }
+}
+
+function quickReply(caseId, subject) {
+  window.location.href = `case_detail.html?id=${encodeURIComponent(caseId)}&reply=1`;
 }
 
 auth.onAuthStateChanged(async user => {

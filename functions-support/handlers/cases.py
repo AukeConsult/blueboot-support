@@ -134,7 +134,10 @@ def update_case(case_id: str):
         agent   = getattr(g, "user_email", "agent")
         update  = {}
 
+        _VALID_STATUSES = {"new", "replied", "not_interested", "follow_up", "resolved", "closed"}
         if "status" in body and body["status"] != current.get("status"):
+            if body["status"] not in _VALID_STATUSES:
+                return _err(f"Invalid status. Choose from: {', '.join(sorted(_VALID_STATUSES))}", 400)
             old = current.get("status", "")
             update["status"] = body["status"]
             _log_action(ref, "status_changed", by=agent, from_val=old, to_val=body["status"])
@@ -205,6 +208,7 @@ def send_reply(case_id: str):
             "updated_at":              now,
             "last_history_at":         now,
             "last_history_direction":  "OUT",
+            "status":                  "replied",
         })
         return _ok("Reply sent")
     except Exception as exc:

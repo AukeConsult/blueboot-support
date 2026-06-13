@@ -27,35 +27,76 @@
       <label for="password" class="form-label small fw-medium">Password</label>
       <input type="password" id="password" class="form-control" autocomplete="current-password">
     </div>
-    <button id="login-btn" class="btn bb-btn-primary w-100">
-      <i class="ti ti-login me-1" aria-hidden="true"></i> Sign in
+    <button id="google-btn" class="btn bb-btn-google w-100 mb-3">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+           width="18" height="18" class="me-2" alt="Google">
+      Sign in with Google
     </button>
+    <div class="bb-divider my-3"><span>or</span></div>
+    <button id="login-btn" class="btn bb-btn-primary w-100">
+      <i class="ti ti-login me-1" aria-hidden="true"></i> Sign in with email
+    </button>
+    <div class="text-center mt-3">
+      <a href="#" id="reset-link" class="small text-muted">Forgot password?</a>
+    </div>
+  </div>
+</div>
+
+<div id="reset-toast" class="position-fixed bottom-0 end-0 p-3" style="z-index:9999">
+  <div id="reset-toast-inner" class="toast align-items-center text-bg-success border-0" role="alert">
+    <div class="d-flex">
+      <div class="toast-body small">Password reset email sent — check your inbox.</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
   </div>
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="js/firebase-config.js"></script>
 <script>
 firebase.initializeApp(window.FIREBASE_CONFIG);
 
-const auth  = firebase.auth();
-const email = document.getElementById("email");
-const pass  = document.getElementById("password");
-const btn   = document.getElementById("login-btn");
-const err   = document.getElementById("error-msg");
+const auth       = firebase.auth();
+const email      = document.getElementById("email");
+const pass       = document.getElementById("password");
+const btn        = document.getElementById("login-btn");
+const googleBtn  = document.getElementById("google-btn");
+const err        = document.getElementById("error-msg");
 
 function showErr(msg) {
   err.textContent = msg;
   err.classList.remove("d-none");
 }
 
+function hideErr() {
+  err.classList.add("d-none");
+}
+
 auth.onAuthStateChanged(user => {
   if (user) window.location.href = "index.html";
 });
 
+// ── Google Sign-In ────────────────────────────────────────────────────────────
+googleBtn.addEventListener("click", async () => {
+  hideErr();
+  googleBtn.disabled = true;
+  googleBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Signing in…';
+  try {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    await auth.signInWithPopup(provider);
+    window.location.href = "index.html";
+  } catch (e) {
+    showErr(e.message || "Google sign-in failed");
+    googleBtn.disabled = false;
+    googleBtn.innerHTML = '<img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="18" height="18" class="me-2" alt="Google">Sign in with Google';
+  }
+});
+
+// ── Email / Password Sign-In ──────────────────────────────────────────────────
 btn.addEventListener("click", async () => {
-  err.classList.add("d-none");
+  hideErr();
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Signing in…';
   try {
@@ -64,7 +105,20 @@ btn.addEventListener("click", async () => {
   } catch (e) {
     showErr(e.message || "Sign-in failed");
     btn.disabled = false;
-    btn.innerHTML = '<i class="ti ti-login me-1"></i> Sign in';
+    btn.innerHTML = '<i class="ti ti-login me-1"></i> Sign in with email';
+  }
+});
+
+// ── Forgot password ───────────────────────────────────────────────────────────
+document.getElementById("reset-link").addEventListener("click", async (e) => {
+  e.preventDefault();
+  const addr = email.value.trim();
+  if (!addr) { showErr("Enter your email address first, then click Forgot password."); return; }
+  try {
+    await auth.sendPasswordResetEmail(addr);
+    new bootstrap.Toast(document.getElementById("reset-toast-inner")).show();
+  } catch (e) {
+    showErr(e.message || "Could not send reset email.");
   }
 });
 

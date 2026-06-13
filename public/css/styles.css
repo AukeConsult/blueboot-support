@@ -110,3 +110,85 @@
 }
 .bb-note-by   { font-weight: 600; }
 .bb-note-body { font-size: .875rem; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+
+/* ── Google sign-in button ───────────────────────────────────────────────── */
+.bb-btn-google {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  color: #374151;
+  font-size: .875rem;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.bb-btn-google:hover { background: #f9fafb; border-color: #9ca3af; }
+
+/* ── Divider with text ───────────────────────────────────────────────────── */
+.bb-divider {
+  display: flex;
+  align-items: center;
+  color: #9ca3af;
+  font-size: .78rem;
+}
+.bb-divider::before,
+.bb-divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid #e5e7eb;
+}
+.bb-divider span { padding: 0 .75rem; }
+
+/* ── Light outline button (for use on dark navbar) ───────────────────────── */
+.bb-btn-outline-light {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.5);
+  color: #fff;
+  font-size: .875rem;
+}
+.bb-btn-outline-light:hover {
+  background: rgba(255,255,255,0.12);
+  border-color: #fff;
+  color: #fff;
+}
+
+/* ── Extended status badges ───────────────────────────────────────────────── */
+.bb-badge-new          { background: #dbeafe; color: #1e40af; }   /* blue   */
+.bb-badge-replied      { background: #d1fae5; color: #065f46; }   /* green  */
+.bb-badge-not_interested { background: #f3f4f6; color: #6b7280; } /* grey   */
+.bb-badge-follow_up    { background: #fef3c7; color: #92400e; }   /* amber  */
+.bb-badge-resolved     { background: #d1fae5; color: #065f46; }   /* green  */
+.bb-badge-closed       { background: #f3f4f6; color: #374151; }   /* dark grey */
+
+/* ── Quick action buttons in table rows ──────────────────────────────────── */
+.bb-quick-actions { display: flex; gap: .35rem; flex-wrap: nowrap; }
+.bb-quick-btn {
+  font-size: .72rem;
+  padding: .2rem .55rem;
+  border-radius: 20px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  white-space: nowrap;
+  cursor: pointer;
+  line-height: 1.4;
+}
+.bb-quick-btn:hover { background: #f9fafb; border-color: #9ca3af; }
+.bb-quick-btn.reply  { border-color: #6366f1; color: #4f46e5; }
+.bb-quick-btn.reply:hover  { background: #eef2ff; }
+.bb-quick-btn.ni     { border-color: #d1d5db; color: #9ca3af; }
+.bb-quick-btn.fu     { border-color: #f59e0b; color: #b45309; }
+.bb-quick-btn.fu:hover     { background: #fffbeb; }
+
+/* ── Reply template selector ─────────────────────────────────────────────── */
+.bb-template-bar { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: .75rem; }
+.bb-tpl-btn {
+  font-size: .75rem;
+  padding: .25rem .65rem;
+  border-radius: 20px;
+  border: 1px solid #c7d2fe;
+  background: #eef2ff;
+  color: #4338ca;
+  cursor: pointer;
+}
+.bb-tpl-btn:hover { background: #e0e7ff; }
