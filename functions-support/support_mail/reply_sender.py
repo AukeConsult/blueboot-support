@@ -1,4 +1,4 @@
-"""support_mail/reply_sender.py — Send support reply emails via SMTP.
+"""support_mail/reply_sender.py — Send support emails via SMTP.
 
 Loads SMTP credentials from Firestore settings/mail_accounts/accounts/{email}
 — the same document the CRM uses — so no credential duplication.
@@ -33,9 +33,9 @@ def _load_account(db, account_email: str) -> dict:
     return doc.to_dict() or {}
 
 
-def send_reply_email(db, from_account: str, to_email: str, subject: str, body_text: str,
-                     body_html: str | None = None) -> None:
-    """Send an email via SMTP using the account settings from Firestore."""
+def _send(db, from_account: str, to_email: str, subject: str,
+          body_text: str, body_html: str | None = None) -> None:
+    """Core SMTP send — shared by all email types."""
     d = _load_account(db, from_account)
 
     smtp_host = str(d.get("smtp_host") or d.get("host") or "").strip()
@@ -68,3 +68,31 @@ def send_reply_email(db, from_account: str, to_email: str, subject: str, body_te
             server.starttls(context=ctx)
             server.login(username, password)
             server.sendmail(from_account, [to_email], msg.as_string())
+
+
+def send_reply_email(db, from_account: str, to_email: str,
+                     subject: str, body_text: str,
+                     body_html: str | None = None) -> None:
+    """Send a manual agent reply to a client."""
+    _send(db, from_account, to_email, subject, body_text, body_html)
+
+
+def send_ack_email(db, from_account: str, to_email: str, to_name: str,
+                   case_id: int, subject: str) -> None:
+    """Send an auto-acknowledgement to the client when a new case is created."""
+    from support_mail.templates import ack_email_html, ack_email_text
+    ack_subject = f"RE: Case {case_id}: {subject}"
+    html = ack_email_html(case_id, subject, to_name, support_email=from_account)
+    text = ack_email_text(case_id, subject, support_email=from_account)
+    _send(db, from_account, to_email, ack_subject, text, html)
+
+
+def send_sla_warning(db, from_account: str, to_email: str,
+                     case_id: int, subject: str, from_client: str,
+                     sla_deadline: str) -> None:
+    """Send an SLA warning email to an agent or admin."""
+    from support_mail.templates import sla_warning_html, sla_warning_text
+    warn_subject = f"⚠️ SLA Alert: Case {case_id} approaching deadline"
+    html = sla_warning_html(case_id, subject, from_client, sla_deadline)
+    text = sla_warning_text(case_id, subject, from_client, sla_deadline)
+    _send(db, from_account, to_email, warn_subject, text, html)

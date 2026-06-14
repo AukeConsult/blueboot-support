@@ -48,7 +48,6 @@
           </select>
           <select id="status-select" class="form-select form-select-sm bb-status-select">
             <option value="new">New</option>
-            <option value="replied">Replied</option>
             <option value="follow_up">Follow Up</option>
             <option value="not_interested">Not Interested</option>
             <option value="resolved">Resolved</option>
@@ -88,17 +87,8 @@
       <div class="tab-content">
         <!-- Reply pane -->
         <div class="tab-pane fade show active" id="pane-reply" role="tabpanel">
-          <div class="bb-template-bar" id="template-bar">
-            <span class="small text-muted me-1" style="line-height:1.8">Templates:</span>
-            <button class="bb-tpl-btn" onclick="applyTemplate('interest')">Thank you for interest</button>
-            <button class="bb-tpl-btn" onclick="applyTemplate('plans')">Subscription plans</button>
-            <button class="bb-tpl-btn" onclick="applyTemplate('demo')">Book a demo</button>
-            <button class="bb-tpl-btn" onclick="applyTemplate('info')">Need more info</button>
-            <button class="bb-tpl-btn" onclick="applyTemplate('notfit')">Not the right fit</button>
-            <button class="bb-tpl-btn" onclick="applyTemplate('followup')">Following up</button>
-          </div>
           <textarea id="reply-body" class="form-control bb-reply-textarea mb-3"
-                    rows="5" placeholder="Select a template above or type your reply…"></textarea>
+                    rows="5" placeholder="Type your reply…"></textarea>
           <div class="d-flex justify-content-end">
             <button id="send-btn" class="btn bb-btn-primary">
               <i class="ti ti-send me-1" aria-hidden="true"></i>Send reply
@@ -347,81 +337,6 @@ async function addNote() {
     btn.innerHTML = '<i class="ti ti-note me-1"></i>Add note';
   }
 }
-
-const _TEMPLATES = {
-  interest: `Thank you for reaching out to Blueboot!
-
-We appreciate your interest in our platform. We'd love to learn more about your needs and show you how Blueboot can help grow your business.
-
-Could you share a bit more about what you're looking for? We'll get back to you with the best options.
-
-Best regards,
-Blueboot Team`,
-
-  plans: `Thank you for your interest in Blueboot!
-
-We offer flexible subscription plans to suit businesses of all sizes:
-
-• Starter — Perfect for small teams getting started
-• Growth — Advanced features for scaling businesses  
-• Enterprise — Full suite with dedicated support
-
-I'd be happy to walk you through the details and find the best fit for your needs. Would you like to schedule a quick call?
-
-Best regards,
-Blueboot Team`,
-
-  demo: `Thank you for your interest in Blueboot!
-
-We'd love to show you exactly how our platform works and answer any questions you have. 
-
-You can book a 30-minute demo at your convenience here: [Your booking link]
-
-Looking forward to connecting with you!
-
-Best regards,
-Blueboot Team`,
-
-  info: `Thank you for reaching out!
-
-To make sure we point you in the right direction, could you share a bit more about:
-• What your main goal is (e.g. lead generation, outreach, CRM)
-• The size of your team
-• Any specific features you're looking for
-
-This will help us provide the most relevant information for your situation.
-
-Best regards,
-Blueboot Team`,
-
-  notfit: `Thank you for reaching out to Blueboot.
-
-After reviewing your enquiry, we don't think we're the right fit for your needs at this time. Our platform is primarily designed for [brief description], which may not align with what you're looking for.
-
-We appreciate you considering us and wish you the best in finding the right solution.
-
-Best regards,
-Blueboot Team`,
-
-  followup: `Hi,
-
-I wanted to follow up on my previous message regarding Blueboot. I understand you may be busy, so I just wanted to check if you had a chance to review the information we sent.
-
-We'd love to help — please feel free to reply to this email or book a quick call at your convenience.
-
-Best regards,
-Blueboot Team`,
-};
-
-function applyTemplate(key) {
-  const fromName = document.getElementById("case-from").textContent.split("<")[0].trim() || "there";
-  let body = _TEMPLATES[key] || "";
-  // Personalise greeting if we have a name
-  if (fromName && fromName !== "—") {
-    body = body.replace("Thank you for reaching out", `Hi ${fromName.split(" ")[0]},\n\nThank you for reaching out`);
-    body = body.replace("Thank you for your interest", `Hi ${fromName.split(" ")[0]},\n\nThank you for your interest`);
-    body = body.replace("Hi,", `Hi ${fromName.split(" ")[0]},`);
-  }
   document.getElementById("reply-body").value = body;
   document.getElementById("reply-body").focus();
 }

@@ -17,6 +17,9 @@
       <i class="ti ti-headset me-2" aria-hidden="true"></i>Support
     </a>
     <div class="ms-auto d-flex align-items-center gap-3">
+      <span class="small" style="color:rgba(255,255,255,0.4)">
+        <span class="bb-refresh-dot" id="refresh-dot" title="Auto-refreshes every 2 min"></span>
+      </span>
       <span id="user-email" class="small" style="color:rgba(255,255,255,0.6)"></span>
       <button id="check-btn" class="btn btn-sm bb-btn-outline-light">
         <i class="ti ti-refresh me-1" aria-hidden="true"></i>Check mail
@@ -31,27 +34,43 @@
   <!-- Stats row -->
   <div class="row g-3 mb-4">
     <div class="col-6 col-md-3">
-      <div class="bb-stat-card">
-        <div class="bb-stat-label">Open</div>
-        <div class="bb-stat-value text-danger" id="stat-open">—</div>
+      <div class="bb-stat-card bb-stat-card-new">
+        <div class="bb-stat-header">
+          <div class="bb-stat-icon bb-stat-icon-new"><i class="ti ti-inbox"></i></div>
+          <span class="bb-stat-label">New</span>
+        </div>
+        <div class="bb-stat-value text-primary" id="stat-new">—</div>
+        <div class="bb-stat-sub">awaiting reply</div>
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="bb-stat-card">
-        <div class="bb-stat-label">In Progress</div>
-        <div class="bb-stat-value text-warning" id="stat-inprogress">—</div>
+      <div class="bb-stat-card bb-stat-card-followup">
+        <div class="bb-stat-header">
+          <div class="bb-stat-icon bb-stat-icon-followup"><i class="ti ti-clock"></i></div>
+          <span class="bb-stat-label">Follow Up</span>
+        </div>
+        <div class="bb-stat-value text-warning" id="stat-followup">—</div>
+        <div class="bb-stat-sub">in progress</div>
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="bb-stat-card">
-        <div class="bb-stat-label">Resolved</div>
+      <div class="bb-stat-card bb-stat-card-resolved">
+        <div class="bb-stat-header">
+          <div class="bb-stat-icon bb-stat-icon-resolved"><i class="ti ti-circle-check"></i></div>
+          <span class="bb-stat-label">Resolved</span>
+        </div>
         <div class="bb-stat-value text-success" id="stat-resolved">—</div>
+        <div class="bb-stat-sub">completed</div>
       </div>
     </div>
     <div class="col-6 col-md-3">
-      <div class="bb-stat-card">
-        <div class="bb-stat-label">Overdue</div>
+      <div class="bb-stat-card bb-stat-card-overdue">
+        <div class="bb-stat-header">
+          <div class="bb-stat-icon bb-stat-icon-overdue"><i class="ti ti-alert-triangle"></i></div>
+          <span class="bb-stat-label">Overdue</span>
+        </div>
         <div class="bb-stat-value text-danger" id="stat-overdue">—</div>
+        <div class="bb-stat-sub">past SLA</div>
       </div>
     </div>
   </div>
@@ -68,7 +87,6 @@
           <select id="filter-status" class="form-select form-select-sm">
             <option value="">All statuses</option>
             <option value="new">New</option>
-            <option value="replied">Replied</option>
             <option value="follow_up">Follow Up</option>
             <option value="not_interested">Not Interested</option>
             <option value="resolved">Resolved</option>
@@ -105,13 +123,13 @@
         <table class="table bb-table mb-0">
           <thead class="bb-thead">
             <tr>
-              <th style="width:90px">Case</th>
+              <th style="width:110px">Case</th>
               <th>Subject</th>
               <th style="width:180px;min-width:140px">From</th>
-              <th style="width:110px">Status</th>
+              <th style="width:120px">Status</th>
               <th style="width:80px">Priority</th>
               <th style="width:130px">Last activity</th>
-              <th style="width:200px">Actions</th>
+              <th style="width:220px">Actions</th>
             </tr>
           </thead>
           <tbody id="cases-tbody">
@@ -132,6 +150,7 @@ firebase.initializeApp(window.FIREBASE_CONFIG);
 const auth = firebase.auth();
 
 let _cases = [];
+let _refreshTimer = null;
 
 async function getToken() {
   return auth.currentUser ? auth.currentUser.getIdToken() : null;
@@ -160,17 +179,18 @@ function setFeedback(msg, type) {
 }
 
 function escHtml(s) {
-  return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return (s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
 function statusBadge(s) {
   const map = {
     new:            ["new",            "New"],
-    replied:        ["replied",        "Replied"],
     follow_up:      ["follow_up",      "Follow Up"],
     not_interested: ["not_interested", "Not Interested"],
     resolved:       ["resolved",       "Resolved"],
     closed:         ["closed",         "Closed"],
+    open:           ["new",            "New"],       // legacy
+    replied:        ["follow_up",      "Follow Up"], // legacy
   };
   const [cls, label] = map[s] || ["secondary", s || "—"];
   return `<span class="badge bb-badge-${cls}">${label}</span>`;
@@ -178,32 +198,84 @@ function statusBadge(s) {
 
 function priorityBadge(p) {
   const map = { high: "danger", normal: "secondary", low: "info" };
-  const cls = map[p] || "secondary";
-  return `<span class="badge bb-badge-${cls}">${p || "normal"}</span>`;
+  return `<span class="badge bb-badge-${map[p] || "secondary"}">${p || "normal"}</span>`;
 }
 
 function relTime(iso) {
   if (!iso) return "—";
   const d = Math.floor((Date.now() - new Date(iso)) / 1000);
-  if (d < 60) return "just now";
-  if (d < 3600)  return `${Math.floor(d / 60)}m ago`;
-  if (d < 86400) return `${Math.floor(d / 3600)}h ago`;
+  if (d < 60)     return "just now";
+  if (d < 3600)   return `${Math.floor(d / 60)}m ago`;
+  if (d < 86400)  return `${Math.floor(d / 3600)}h ago`;
   return `${Math.floor(d / 86400)}d ago`;
+}
+
+function isOverdue(c) {
+  if (!c.sla_deadline) return false;
+  const active = ["new", "open", "follow_up"];
+  return active.includes(c.status) && new Date(c.sla_deadline) < new Date();
+}
+
+function isUnread(c) {
+  // Unread = last message was from customer (IN) and case is active
+  const active = ["new", "open", "follow_up"];
+  return active.includes(c.status) && c.last_history_direction === "IN";
+}
+
+function rowStatusClass(s) {
+  const norm = (s === "open" || s === "replied") ? (s === "replied" ? "follow_up" : "new") : s;
+  return `bb-row-${norm}`;
+}
+
+function quickActions(c) {
+  const inactive = ["not_interested", "resolved", "closed"];
+  if (inactive.includes(c.status)) {
+    return `
+      <div class="bb-quick-actions">
+        <button class="bb-quick-btn reopen" onclick="quickStatus('${c.id}','new')">
+          <i class="ti ti-refresh" style="font-size:.7rem"></i> Re-open
+        </button>
+      </div>`;
+  }
+  return `
+    <div class="bb-quick-actions">
+      <button class="bb-quick-btn reply" onclick="quickReply('${c.id}','${escHtml(c.subject||'')}')">
+        <i class="ti ti-send" style="font-size:.7rem"></i> Reply
+      </button>
+      <button class="bb-quick-btn fu" onclick="quickStatus('${c.id}','follow_up')">
+        Follow Up
+      </button>
+      <button class="bb-quick-btn ni" onclick="quickStatus('${c.id}','not_interested')">
+        Not Interested
+      </button>
+    </div>`;
 }
 
 function renderCases(cases) {
   const tbody = document.getElementById("cases-tbody");
+  const newCount = cases.filter(c => c.status === "new" || c.status === "open").length;
+  document.title = newCount > 0 ? `(${newCount} new) Cases — Blueboot Support` : "Cases — Blueboot Support";
   document.getElementById("case-count").textContent =
     `${cases.length} case${cases.length !== 1 ? "s" : ""}`;
+
   if (!cases.length) {
     tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-5">No cases found</td></tr>`;
     return;
   }
-  tbody.innerHTML = cases.map(c => `
-    <tr class="bb-row" onclick="window.location='case_detail.html?id=${encodeURIComponent(c.id)}'"
+
+  tbody.innerHTML = cases.map(c => {
+    const overdue = isOverdue(c);
+    const unread  = isUnread(c);
+    return `
+    <tr class="bb-row ${rowStatusClass(c.status)}" onclick="window.location='case_detail.html?id=${encodeURIComponent(c.id)}'"
         style="cursor:pointer">
-      <td><span class="bb-case-id">Case ${c.case_id || c.id}</span></td>
-      <td class="bb-subject">${escHtml(c.subject || "(no subject)")}</td>
+      <td>
+        <span class="bb-case-id">Case ${c.case_id || c.id}</span>
+        ${overdue ? '<span class="bb-overdue-chip">Overdue</span>' : ""}
+      </td>
+      <td class="bb-subject">
+        ${unread ? '<span class="bb-unread-dot" title="Customer reply waiting"></span>' : ""}${escHtml(c.subject || "(no subject)")}
+      </td>
       <td style="width:180px;min-width:140px">
         ${escHtml(c.from_name || c.from_email || "—")}<br>
         <small class="text-muted">${escHtml(c.from_email || "")}</small>
@@ -211,21 +283,9 @@ function renderCases(cases) {
       <td>${statusBadge(c.status)}</td>
       <td>${priorityBadge(c.priority)}</td>
       <td class="small text-muted">${relTime(c.last_history_at || c.updated_at)}</td>
-      <td onclick="event.stopPropagation()">
-        <div class="bb-quick-actions">
-          <button class="bb-quick-btn reply" onclick="quickReply('${c.id}','${escHtml(c.subject||'')}')">
-            <i class="ti ti-send" style="font-size:.7rem"></i> Reply
-          </button>
-          <button class="bb-quick-btn fu" onclick="quickStatus('${c.id}','follow_up')">
-            Follow Up
-          </button>
-          <button class="bb-quick-btn ni" onclick="quickStatus('${c.id}','not_interested')">
-            Not Interested
-          </button>
-        </div>
-      </td>
-    </tr>
-  `).join("");
+      <td onclick="event.stopPropagation()">${quickActions(c)}</td>
+    </tr>`;
+  }).join("");
 }
 
 function applyFilters() {
@@ -234,7 +294,7 @@ function applyFilters() {
   const pr = document.getElementById("filter-priority").value;
   const ac = document.getElementById("filter-account").value;
   renderCases(_cases.filter(c =>
-    (!st || c.status === st) &&
+    (!st || c.status === st || (st === "new" && c.status === "open")) &&
     (!pr || (c.priority || "normal") === pr) &&
     (!ac || c.mail_account === ac) &&
     (!q  || (c.subject || "").toLowerCase().includes(q) ||
@@ -245,10 +305,10 @@ function applyFilters() {
 async function loadStats() {
   try {
     const s = await fetchJSON("/api/support/stats");
-    document.getElementById("stat-open").textContent      = s.open        ?? 0;
-    document.getElementById("stat-inprogress").textContent = s.in_progress ?? 0;
-    document.getElementById("stat-resolved").textContent  = s.resolved     ?? 0;
-    document.getElementById("stat-overdue").textContent   = s.overdue      ?? 0;
+    document.getElementById("stat-new").textContent      = s.new        ?? 0;
+    document.getElementById("stat-followup").textContent = s.follow_up  ?? 0;
+    document.getElementById("stat-resolved").textContent = s.resolved   ?? 0;
+    document.getElementById("stat-overdue").textContent  = s.overdue    ?? 0;
   } catch (_) { /* non-fatal */ }
 }
 
@@ -259,7 +319,6 @@ async function loadCases() {
 
     const accounts = [...new Set(_cases.map(c => c.mail_account).filter(Boolean))];
     const acSel = document.getElementById("filter-account");
-    // Reset and rebuild
     while (acSel.options.length > 1) acSel.remove(1);
     accounts.forEach(a => {
       const opt = document.createElement("option");
@@ -274,6 +333,15 @@ async function loadCases() {
   }
 }
 
+async function refresh() {
+  await Promise.all([loadStats(), loadCases()]);
+}
+
+function startAutoRefresh() {
+  if (_refreshTimer) clearInterval(_refreshTimer);
+  _refreshTimer = setInterval(refresh, 2 * 60 * 1000); // every 2 minutes
+}
+
 async function checkMail() {
   const btn = document.getElementById("check-btn");
   btn.disabled = true;
@@ -286,7 +354,7 @@ async function checkMail() {
       `${r.appended} message${r.appended !== 1 ? "s" : ""} appended.`,
       "success"
     );
-    await Promise.all([loadCases(), loadStats()]);
+    await refresh();
   } catch (e) {
     setFeedback(`<i class="ti ti-circle-x me-1"></i>${escHtml(e.message)}`, "danger");
   } finally {
@@ -303,26 +371,27 @@ async function quickStatus(caseId, status) {
       headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ status }),
     });
-    setFeedback(`<i class="ti ti-check me-1"></i>Status updated to <b>${status.replace(/_/g,' ')}</b>`, "success");
-    await Promise.all([loadCases(), loadStats()]);
+    setFeedback(`<i class="ti ti-check me-1"></i>Status updated to <b>${status.replace(/_/g," ")}</b>`, "success");
+    await refresh();
     setTimeout(() => setFeedback(null), 2500);
   } catch (e) {
     setFeedback(`<i class="ti ti-circle-x me-1"></i>${escHtml(e.message)}`, "danger");
   }
 }
 
-function quickReply(caseId, subject) {
+function quickReply(caseId) {
   window.location.href = `case_detail.html?id=${encodeURIComponent(caseId)}&reply=1`;
 }
 
 auth.onAuthStateChanged(async user => {
   if (!user) { window.location.href = "login.html"; return; }
   document.getElementById("user-email").textContent = user.email;
-  await Promise.all([loadStats(), loadCases()]);
+  await refresh();
+  startAutoRefresh();
 });
 
-document.getElementById("logout-btn").onclick        = () => auth.signOut().then(() => { window.location.href = "login.html"; });
-document.getElementById("check-btn").onclick         = checkMail;
+document.getElementById("logout-btn").onclick  = () => auth.signOut().then(() => { window.location.href = "login.html"; });
+document.getElementById("check-btn").onclick   = checkMail;
 document.getElementById("search-input").addEventListener("input",  applyFilters);
 document.getElementById("filter-status").addEventListener("change", applyFilters);
 document.getElementById("filter-priority").addEventListener("change", applyFilters);

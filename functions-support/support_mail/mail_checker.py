@@ -45,6 +45,75 @@ def _detect_priority(subject: str, body: str) -> str:
     return "normal"
 
 
+# ── Automated sender / bounce detection ──────────────────────────────────────
+
+_AUTO_FROM = {
+    "mailer-daemon", "postmaster", "noreply", "no-reply", "no_reply",
+    "do-not-reply", "donotreply", "bounce", "bounces", "daemon",
+    "auto-reply", "autoreply", "mail-daemon", "mailerdaemon",
+    "notification", "notifications", "alerts",
+}
+
+_AUTO_SUBJECT = (
+    "mail delivery failed",
+    "delivery status notification",
+    "delivery failure",
+    "undeliverable",
+    "returned mail",
+    "failure notice",
+    "non-delivery report",
+    "non deliverable",
+    "auto:",
+    "automatic reply",
+    "out of office",
+    "away from office",
+    "vacation:",
+    "auto-reply:",
+)
+
+
+def _is_automated(from_email: str, subject: str) -> bool:
+    """Return True if this email is from an automated system and should be skipped.
+    Prevents bounce notifications and auto-replies from creating support cases.
+    """
+    addr = (from_email or "").lower().strip()
+    # Check local part (before @) against known automated senders
+    local = addr.split("@")[0] if "@" in addr else addr
+    if any(kw in local for kw in _AUTO_FROM):
+        return True
+    # Check full address too (e.g. bounce+xxx@domain.com)
+    if any(kw in addr for kw in _AUTO_FROM):
+        return True
+    # Check subject line
+    subj = (subject or "").lower().strip()
+    if any(subj.startswith(kw) or kw in subj for kw in _AUTO_SUBJECT):
+        return True
+    return False
+
+
+# ── Subject cleaning ─────────────────────────────────────────────────────────
+
+_SUBJ_PREFIX_RE = re.compile(
+    r"^\s*(re|fw|fwd|aw|antw|sv|vs)\s*:\s*",
+    re.IGNORECASE,
+)
+
+
+def _clean_subject(subject: str) -> str:
+    """Strip Re:/Fwd:/FW: prefixes AND internal Case N: tags recursively.
+    'Re: RE: Case 8: Re: test 1' → 'test 1'
+    Applied before storing a case subject so agent reply subjects read cleanly.
+    """
+    s = (subject or "").strip()
+    _CASE_TAG_RE = re.compile(r"(?i)^\s*Case\s+\d+\s*:\s*")
+    prev = None
+    while prev != s:
+        prev = s
+        s = _SUBJ_PREFIX_RE.sub("", s).strip()   # strip Re: / Fwd: etc.
+        s = _CASE_TAG_RE.sub("", s).strip()       # strip Case N:
+    return s or "(no subject)"
+
+
 # ── String helpers ────────────────────────────────────────────────────────────
 
 def _decode_str(val: str | None) -> str:
@@ -302,7 +371,15 @@ def run_mail_check(db, account_email: str | None = None, days: int = 7, dry_run:
 
             from_addr = _extract_email(msg["from"])
             from_name = _extract_name(msg["from"])
-            subject   = msg["subject"]
+            subject   = _clean_subject(msg["subject"])
+
+            # Skip bounce notifications, delivery failures, and auto-replies
+            if _is_automated(from_addr, subject):
+                print(f"[support-mail]   SKIP automated/bounce: {from_addr} — {subject[:50]}", flush=True)
+                if dry_run:
+                    print(f"[dry-run]   SKIP automated: {subject[:60]}", flush=True)
+                continue
+
             case_match = _CASE_RE.search(subject)
 
             if case_match:
@@ -416,8 +493,14 @@ def run_mail_check(db, account_email: str | None = None, days: int = 7, dry_run:
                     new_cases += 1
                     print(f"[support-mail]   created Case {case_id_int} ({priority}): {subject[:60]}", flush=True)
 
-                    # Auto-reply disabled — agent replies manually from the board
-                    print(f"[support-mail]   case {case_id_int} awaiting manual reply", flush=True)
+                    # Send auto-acknowledgement to client
+                    try:
+                        from support_mail.reply_sender import send_ack_email
+                        send_ack_email(db, acc_email, from_addr, from_name,
+                                       case_id_int, subject)
+                        print(f"[support-mail]   ack sent to {from_addr}", flush=True)
+                    except Exception as _ack_exc:
+                        print(f"[support-mail]   ack failed (case still created): {_ack_exc}", flush=True)
 
                 except Exception as exc:
                     errors.append(f"Case create failed for {from_addr}: {exc}")

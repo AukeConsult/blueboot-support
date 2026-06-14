@@ -21,9 +21,37 @@
 .bb-brand-icon { width: 52px; height: 52px; background: var(--bb-indigo); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: #fff; }
 
 /* ── Stat cards ──────────────────────────────────────────────────────────── */
-.bb-stat-card { background: #fff; border-radius: var(--bb-radius); padding: 1rem 1.25rem; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
-.bb-stat-label { font-size: .75rem; color: #6b7280; text-transform: uppercase; letter-spacing: .05em; margin-bottom: .25rem; }
-.bb-stat-value { font-size: 1.75rem; font-weight: 700; line-height: 1; }
+.bb-stat-card {
+  background: #fff;
+  border-radius: var(--bb-radius);
+  padding: 1rem 1.25rem;
+  box-shadow: 0 1px 4px rgba(0,0,0,.06);
+  border-top: 3px solid #e5e7eb;
+  display: flex;
+  flex-direction: column;
+  gap: .25rem;
+}
+.bb-stat-card-new      { border-top-color: #3b82f6; }
+.bb-stat-card-followup { border-top-color: #f59e0b; }
+.bb-stat-card-resolved { border-top-color: #10b981; }
+.bb-stat-card-overdue  { border-top-color: #ef4444; }
+
+.bb-stat-header { display: flex; align-items: center; gap: .5rem; }
+.bb-stat-icon {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+.bb-stat-icon-new      { background: #dbeafe; color: #2563eb; }
+.bb-stat-icon-followup { background: #fef3c7; color: #d97706; }
+.bb-stat-icon-resolved { background: #d1fae5; color: #059669; }
+.bb-stat-icon-overdue  { background: #fee2e2; color: #dc2626; }
+
+.bb-stat-label { font-size: .72rem; color: #6b7280; text-transform: uppercase; letter-spacing: .05em; }
+.bb-stat-value { font-size: 1.9rem; font-weight: 700; line-height: 1; margin-top: .125rem; }
+.bb-stat-sub   { font-size: .72rem; color: #9ca3af; margin-top: .25rem; }
 
 /* ── Filter card ─────────────────────────────────────────────────────────── */
 .bb-filter-card { border: none; box-shadow: 0 1px 4px rgba(0,0,0,.06); border-radius: var(--bb-radius); }
@@ -39,12 +67,53 @@
 .bb-case-id { font-weight: 600; color: var(--bb-indigo); font-size: .85rem; }
 .bb-subject { font-weight: 500; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* ── Row status left accent ──────────────────────────────────────────────── */
+.bb-row-new td:first-child          { border-left: 3px solid #3b82f6; }
+.bb-row-follow_up td:first-child    { border-left: 3px solid #f59e0b; }
+.bb-row-not_interested td:first-child { border-left: 3px solid #d1d5db; }
+.bb-row-resolved td:first-child     { border-left: 3px solid #10b981; }
+.bb-row-closed td:first-child       { border-left: 3px solid #e5e7eb; }
+
+/* ── Unread indicator ────────────────────────────────────────────────────── */
+.bb-unread-dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  background: #3b82f6;
+  border-radius: 50%;
+  vertical-align: middle;
+  margin-right: 5px;
+  margin-bottom: 1px;
+  flex-shrink: 0;
+}
+
+/* ── Overdue chip ────────────────────────────────────────────────────────── */
+.bb-overdue-chip {
+  font-size: .62rem;
+  background: #fee2e2;
+  color: #dc2626;
+  border-radius: 20px;
+  padding: .1em .45em;
+  font-weight: 600;
+  white-space: nowrap;
+  vertical-align: middle;
+  margin-left: 4px;
+}
+
 /* ── Status badges ───────────────────────────────────────────────────────── */
 .badge { font-size: .72rem; font-weight: 500; padding: .3em .6em; border-radius: 20px; }
 .bb-badge-danger    { background: #fee2e2; color: #991b1b; }
 .bb-badge-warning   { background: #fef3c7; color: #92400e; }
 .bb-badge-success   { background: #d1fae5; color: #065f46; }
 .bb-badge-secondary { background: #f3f4f6; color: #374151; }
+.bb-badge-info      { background: #dbeafe; color: #1e40af; }
+
+/* ── Extended status badges ──────────────────────────────────────────────── */
+.bb-badge-new            { background: #dbeafe; color: #1e40af; }
+.bb-badge-not_interested { background: #f3f4f6; color: #6b7280; }
+.bb-badge-follow_up      { background: #fef3c7; color: #92400e; }
+.bb-badge-resolved       { background: #d1fae5; color: #065f46; }
+.bb-badge-closed         { background: #f3f4f6; color: #374151; }
+.bb-badge-open           { background: #dbeafe; color: #1e40af; } /* legacy */
 
 /* ── Case header card ────────────────────────────────────────────────────── */
 .bb-case-header-card { border: none; box-shadow: 0 1px 4px rgba(0,0,0,.06); border-radius: var(--bb-radius); }
@@ -74,14 +143,11 @@
 .bb-btn-outline { background: transparent; border: 1px solid #d1d5db; color: #374151; font-size: .875rem; }
 .bb-btn-outline:hover { background: #f3f4f6; }
 
-/* ── Info badge (low priority) ───────────────────────────────────────────── */
-.bb-badge-info { background: #dbeafe; color: #1e40af; }
-
 /* ── Composer tabs ───────────────────────────────────────────────────────── */
 .bb-composer-tabs .nav-link { font-size: .85rem; color: #6b7280; padding: .4rem .75rem; }
 .bb-composer-tabs .nav-link.active { color: var(--bb-indigo); font-weight: 600; }
 
-/* ── Timeline action events (system/audit log items) ─────────────────────── */
+/* ── Timeline action events ──────────────────────────────────────────────── */
 .bb-action-event {
   font-size: .8rem;
   color: #6b7280;
@@ -139,7 +205,7 @@
 }
 .bb-divider span { padding: 0 .75rem; }
 
-/* ── Light outline button (for use on dark navbar) ───────────────────────── */
+/* ── Light outline button (dark navbar) ──────────────────────────────────── */
 .bb-btn-outline-light {
   background: transparent;
   border: 1px solid rgba(255,255,255,0.5);
@@ -151,14 +217,6 @@
   border-color: #fff;
   color: #fff;
 }
-
-/* ── Extended status badges ───────────────────────────────────────────────── */
-.bb-badge-new          { background: #dbeafe; color: #1e40af; }   /* blue   */
-.bb-badge-replied      { background: #d1fae5; color: #065f46; }   /* green  */
-.bb-badge-not_interested { background: #f3f4f6; color: #6b7280; } /* grey   */
-.bb-badge-follow_up    { background: #fef3c7; color: #92400e; }   /* amber  */
-.bb-badge-resolved     { background: #d1fae5; color: #065f46; }   /* green  */
-.bb-badge-closed       { background: #f3f4f6; color: #374151; }   /* dark grey */
 
 /* ── Quick action buttons in table rows ──────────────────────────────────── */
 .bb-quick-actions { display: flex; gap: .35rem; flex-wrap: nowrap; }
@@ -173,22 +231,27 @@
   cursor: pointer;
   line-height: 1.4;
 }
-.bb-quick-btn:hover { background: #f9fafb; border-color: #9ca3af; }
-.bb-quick-btn.reply  { border-color: #6366f1; color: #4f46e5; }
-.bb-quick-btn.reply:hover  { background: #eef2ff; }
-.bb-quick-btn.ni     { border-color: #d1d5db; color: #9ca3af; }
-.bb-quick-btn.fu     { border-color: #f59e0b; color: #b45309; }
-.bb-quick-btn.fu:hover     { background: #fffbeb; }
+.bb-quick-btn:hover         { background: #f9fafb; border-color: #9ca3af; }
+.bb-quick-btn.reply         { border-color: #6366f1; color: #4f46e5; }
+.bb-quick-btn.reply:hover   { background: #eef2ff; }
+.bb-quick-btn.ni            { border-color: #d1d5db; color: #9ca3af; }
+.bb-quick-btn.fu            { border-color: #f59e0b; color: #b45309; }
+.bb-quick-btn.fu:hover      { background: #fffbeb; }
+.bb-quick-btn.reopen        { border-color: #3b82f6; color: #2563eb; }
+.bb-quick-btn.reopen:hover  { background: #eff6ff; }
 
 /* ── Reply template selector ─────────────────────────────────────────────── */
-.bb-template-bar { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: .75rem; }
-.bb-tpl-btn {
-  font-size: .75rem;
-  padding: .25rem .65rem;
-  border-radius: 20px;
-  border: 1px solid #c7d2fe;
-  background: #eef2ff;
-  color: #4338ca;
-  cursor: pointer;
+/* ── Auto-refresh indicator ──────────────────────────────────────────────── */
+.bb-refresh-dot {
+  display: inline-block;
+  width: 6px; height: 6px;
+  background: #10b981;
+  border-radius: 50%;
+  margin-right: 4px;
+  vertical-align: middle;
+  animation: bb-pulse 2s infinite;
 }
-.bb-tpl-btn:hover { background: #e0e7ff; }
+@keyframes bb-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: .3; }
+}

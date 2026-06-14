@@ -134,7 +134,7 @@ def update_case(case_id: str):
         agent   = getattr(g, "user_email", "agent")
         update  = {}
 
-        _VALID_STATUSES = {"new", "replied", "not_interested", "follow_up", "resolved", "closed"}
+        _VALID_STATUSES = {"new", "not_interested", "follow_up", "resolved", "closed"}
         if "status" in body and body["status"] != current.get("status"):
             if body["status"] not in _VALID_STATUSES:
                 return _err(f"Invalid status. Choose from: {', '.join(sorted(_VALID_STATUSES))}", 400)
@@ -208,7 +208,7 @@ def send_reply(case_id: str):
             "updated_at":              now,
             "last_history_at":         now,
             "last_history_direction":  "OUT",
-            "status":                  "replied",
+            "status":                  "follow_up",
         })
         return _ok("Reply sent")
     except Exception as exc:
@@ -254,18 +254,25 @@ def get_stats():
     try:
         db     = _db()
         docs   = list(db.collection_group("cases").stream())
-        counts = {"open": 0, "in_progress": 0, "resolved": 0,
-                  "closed": 0, "total": 0, "overdue": 0}
+        counts = {"new": 0, "follow_up": 0, "not_interested": 0,
+                  "resolved": 0, "total": 0, "overdue": 0}
         now_iso = _now_iso()
         for d in docs:
-            c = d.to_dict() or {}
-            st = c.get("status", "open")
+            c  = d.to_dict() or {}
+            st = c.get("status", "new")
             counts["total"] += 1
-            if st in counts:
-                counts[st] += 1
-            # Count overdue (open/in_progress past SLA deadline)
+            # Normalise legacy statuses
+            if st in ("new", "open"):
+                counts["new"] += 1
+            elif st == "follow_up":
+                counts["follow_up"] += 1
+            elif st == "not_interested":
+                counts["not_interested"] += 1
+            elif st in ("resolved", "closed", "replied"):
+                counts["resolved"] += 1
+            # Overdue: past SLA and still needs agent action
             sla = c.get("sla_deadline") or ""
-            if sla and sla < now_iso and st in ("open", "in_progress"):
+            if sla and sla < now_iso and st in ("new", "open", "follow_up"):
                 counts["overdue"] += 1
         return jsonify(counts)
     except Exception as exc:

@@ -27,8 +27,9 @@ CORS(app)
 
 from handlers.cases      import bp as cases_bp
 from handlers.mail_check import bp as mail_check_bp
+from handlers.sla_check  import bp as sla_check_bp
 
-for bp in (cases_bp, mail_check_bp):
+for bp in (cases_bp, mail_check_bp, sla_check_bp):
     app.register_blueprint(bp)
 
 # ── Minimum role per blueprint for mutating requests ─────────────────────────
@@ -36,12 +37,13 @@ for bp in (cases_bp, mail_check_bp):
 _BLUEPRINT_MIN_ROLES: dict[str, str] = {
     "cases":      "campaign-user",
     "mail_check": "campaign-user",
+    "sla_check":  "campaign-user",
 }
 
 # ── Auth middleware ───────────────────────────────────────────────────────────
 
 # Paths that bypass user auth (called by Cloud Scheduler via service account)
-_SERVICE_PATHS = {"/check-mail"}
+_SERVICE_PATHS = {"/check-mail", "/check-sla"}
 
 
 @app.before_request

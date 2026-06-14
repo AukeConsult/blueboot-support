@@ -36,6 +36,7 @@ GCP_PROJECT          = cfg.get("GCP_PROJECT", "blueboot-market")
 DEFAULT_MAIL_ACCOUNT = cfg.get("DEFAULT_MAIL_ACCOUNT", "sales@blueboot.ai")
 MAIL_CHECK_DAYS      = cfg.get("MAIL_CHECK_DAYS", 7)
 SUPPORT_DEDUP_DAYS   = cfg.get("SUPPORT_DEDUP_DAYS", 15)
+SUPPORT_ADMIN_EMAILS = cfg.get("SUPPORT_ADMIN_EMAILS", [])
 
 # ── Firebase init ─────────────────────────────────────────────────────────────
 import firebase_admin
@@ -174,6 +175,24 @@ def cmd_case(args):
     print(f"{'─'*60}\n")
 
 
+def cmd_sync_settings(_args=None):
+    """Push settings from secrets.py to Firestore settings/support_meta.
+    Run this whenever you change SUPPORT_ADMIN_EMAILS or SUPPORT_DEDUP_DAYS.
+    """
+    emails = SUPPORT_ADMIN_EMAILS
+    if isinstance(emails, str):
+        emails = [emails]
+
+    update = {
+        "admin_emails": emails,
+        "dedup_days":   SUPPORT_DEDUP_DAYS,
+    }
+    db.collection("settings").document("support_meta").set(update, merge=True)
+    print(f"\n  admin_emails : {emails}")
+    print(f"  dedup_days   : {SUPPORT_DEDUP_DAYS}")
+    print("\nSettings synced to Firestore settings/support_meta\n")
+
+
 def cmd_check_mail(args):
     """Fetch new emails and create/update cases."""
     from support_mail.mail_checker import run_mail_check
@@ -276,6 +295,7 @@ def main(argv=None):
     )
 
     # Commands
+    parser.add_argument("--sync-settings", action="store_true",  help="Push secrets settings to Firestore")
     parser.add_argument("--stats",        action="store_true",  help="Show case counts by status")
     parser.add_argument("--list-cases",   action="store_true",  help="List cases")
     parser.add_argument("--case",         metavar="ID",         help="Show timeline for a case")
@@ -297,7 +317,9 @@ def main(argv=None):
 
     args = parser.parse_args(argv)
 
-    if args.stats:
+    if args.sync_settings:
+        cmd_sync_settings()
+    elif args.stats:
         cmd_stats(args)
     elif args.list_cases:
         cmd_list_cases(args)
