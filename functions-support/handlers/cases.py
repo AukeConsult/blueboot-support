@@ -185,7 +185,8 @@ def send_reply(case_id: str):
         case         = ref.get().to_dict() or {}
         to_email     = case.get("from_email", "")
         mail_account = case.get("mail_account", "")
-        subject_line = case.get("subject", "")
+        from support_mail.mail_checker import _clean_subject
+        subject_line = _clean_subject(case.get("subject", ""))
         subject      = f"RE: Case {case_id}: {subject_line}"
         agent        = getattr(g, "user_email", "agent")
 
