@@ -114,6 +114,54 @@ def _clean_subject(subject: str) -> str:
     return s or "(no subject)"
 
 
+# ── Short description extraction (no AI — heuristic only) ────────────────────
+# Strips quoted replies, forwarded headers, greetings and sign-offs from the
+# first inbound email body so the board list can show a short, useful snippet
+# of what the case is actually about instead of just repeating the subject.
+
+_QUOTE_LINE_RE   = re.compile(r"^\s*>")
+_QUOTE_HEADER_RE = re.compile(
+    r"^\s*(On .{0,80}wrote:|-{2,}\s*Original Message\s*-{2,}|From:\s|Sent:\s|To:\s|Subject:\s)",
+    re.IGNORECASE,
+)
+_GREETING_RE = re.compile(
+    r"^\s*(hi|hello|hey|dear|good morning|good afternoon|good evening)\b[^,]{0,40}[,!.]?\s*$",
+    re.IGNORECASE,
+)
+_SIGNOFF_RE = re.compile(
+    r"^\s*(thanks|thank you|regards|best regards|best|cheers|sincerely|kind regards|--)\b",
+    re.IGNORECASE,
+)
+
+
+def _short_description(body: str, max_len: int = 140) -> str:
+    """Best-effort one-line summary of an inbound email for the board's
+    Description column. No AI/LLM call — just strips greeting, quoted-reply,
+    and signature noise, then returns the first real sentence of content.
+    """
+    lines: list[str] = []
+    for raw_line in (body or "").splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        if _QUOTE_LINE_RE.match(line) or _QUOTE_HEADER_RE.match(line):
+            break  # everything from here on is a quoted/forwarded reply
+        if _SIGNOFF_RE.match(line):
+            break  # everything from here on is a signature/sign-off
+        if _GREETING_RE.match(line):
+            continue  # skip "Hi," / "Hello John," etc.
+        lines.append(line)
+        if len(" ".join(lines)) >= max_len:
+            break
+
+    snippet = re.sub(r"\s+", " ", " ".join(lines)).strip()
+    if not snippet:
+        return ""
+    if len(snippet) > max_len:
+        snippet = snippet[:max_len].rsplit(" ", 1)[0].rstrip(",.;:") + "…"
+    return snippet
+
+
 # ── String helpers ────────────────────────────────────────────────────────────
 
 def _decode_str(val: str | None) -> str:
@@ -267,6 +315,46 @@ def _case_ref(db, account_email: str, case_id: int):
               .document(str(case_id)))
 
 
+# ── Per-board display numbering ───────────────────────────────────────────────
+# `case_id` (above) stays the single global, internal key used for routing and
+# lookups — unchanged. `board_no` is a second, per-mailbox counter that starts
+# at 1 for each board and is what agents/customers actually see ("Support Case 3").
+# Because it's only ever queried scoped to one account's own cases subcollection,
+# two boards can never collide even if they happen to both be on "Case 1".
+
+_BOARD_LABELS = {
+    "sales@blueboot.ai":   "Sales",
+    "support@blueboot.ai": "Support",
+}
+
+
+def _board_label(account_email: str) -> str:
+    """Human-friendly board name for a mailbox (falls back to its local-part)."""
+    key = (account_email or "").strip().lower()
+    if key in _BOARD_LABELS:
+        return _BOARD_LABELS[key]
+    return (key.split("@")[0] or "Case").capitalize()
+
+
+def _next_board_no(db, account_email: str) -> int:
+    """Atomically increment the display counter for one mailbox/board."""
+    from google.cloud import firestore
+
+    key         = (account_email or "").strip().lower()
+    counter_ref = db.collection("settings").document("support_meta")
+
+    @firestore.transactional
+    def _inc(tx, ref):
+        snap      = ref.get(transaction=tx)
+        board_seq = dict((snap.to_dict() or {}).get("board_seq") or {})
+        next_no   = (board_seq.get(key) or 0) + 1
+        board_seq[key] = next_no
+        tx.set(ref, {"board_seq": board_seq}, merge=True)
+        return next_no
+
+    return _inc(db.transaction(), counter_ref)
+
+
 def _log_action(case_ref, action_type: str, by: str = "system",
                 from_val=None, to_val=None, note: str | None = None) -> None:
     case_ref.collection("actions").document().set({
@@ -384,9 +472,29 @@ def run_mail_check(db, account_email: str | None = None, days: int = 7, dry_run:
 
             if case_match:
                 # ── Append to existing case ───────────────────────────────
-                case_id_int = int(case_match.group(1))
-                ref         = _case_ref(db, acc_email, case_id_int)
-                if not ref.get().exists:
+                # Try the per-board display number first (what the customer
+                # actually sees in the subject), scoped to this one mailbox —
+                # then fall back to the legacy global case_id for cases
+                # created before board_no existed.
+                matched_no  = int(case_match.group(1))
+                board_docs  = list(
+                    db.collection("support_mail_accounts")
+                      .document(acc_email)
+                      .collection("cases")
+                      .where("board_no", "==", matched_no)
+                      .limit(1)
+                      .stream()
+                )
+                if board_docs:
+                    ref         = board_docs[0].reference
+                    case_id_int = board_docs[0].to_dict().get("case_id", matched_no)
+                else:
+                    case_id_int = matched_no
+                    ref         = _case_ref(db, acc_email, case_id_int)
+                    if not ref.get().exists:
+                        ref = None
+
+                if ref is None:
                     case_match = None   # case not found — fall through to new case
                 else:
                     if dry_run:
@@ -453,14 +561,17 @@ def run_mail_check(db, account_email: str | None = None, days: int = 7, dry_run:
                         new_cases += 1
                         continue
                     case_id_int = _next_case_id(db)
+                    board_no    = _next_board_no(db, acc_email)
                     now_iso     = now.isoformat()
                     sla_iso     = (now + timedelta(hours=24)).isoformat()
 
                     ref = _case_ref(db, acc_email, case_id_int)
                     ref.set({
                         "case_id":               case_id_int,
+                        "board_no":              board_no,
                         "mail_account":          acc_email,
                         "subject":               subject,
+                        "description":           _short_description(msg["body"]),
                         "from_email":            from_addr,
                         "from_name":             from_name,
                         "status":                "new",
@@ -496,9 +607,10 @@ def run_mail_check(db, account_email: str | None = None, days: int = 7, dry_run:
                     # Send auto-acknowledgement to client
                     try:
                         from support_mail.reply_sender import send_ack_email
+                        case_label = f"{_board_label(acc_email)} Case {board_no}"
                         send_ack_email(db, acc_email, from_addr, from_name,
-                                       case_id_int, subject)
-                        print(f"[support-mail]   ack sent to {from_addr}", flush=True)
+                                       case_id_int, subject, case_label=case_label)
+                        print(f"[support-mail]   ack sent to {from_addr} ({case_label})", flush=True)
                     except Exception as _ack_exc:
                         print(f"[support-mail]   ack failed (case still created): {_ack_exc}", flush=True)
 

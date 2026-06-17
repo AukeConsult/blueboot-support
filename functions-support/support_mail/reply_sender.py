@@ -78,12 +78,17 @@ def send_reply_email(db, from_account: str, to_email: str,
 
 
 def send_ack_email(db, from_account: str, to_email: str, to_name: str,
-                   case_id: int, subject: str) -> None:
-    """Send an auto-acknowledgement to the client when a new case is created."""
+                   case_id: int, subject: str, case_label: str | None = None) -> None:
+    """Send an auto-acknowledgement to the client when a new case is created.
+
+    case_label (e.g. "Support Case 3") is the per-board display number shown
+    to the customer; falls back to the bare global case_id if not given.
+    """
     from support_mail.templates import ack_email_html, ack_email_text
-    ack_subject = f"RE: Case {case_id}: {subject}"
-    html = ack_email_html(case_id, subject, to_name, support_email=from_account)
-    text = ack_email_text(case_id, subject, support_email=from_account)
+    label       = case_label or f"Case {case_id}"
+    ack_subject = f"RE: {label}: {subject}"
+    html = ack_email_html(case_id, subject, to_name, support_email=from_account, case_label=label)
+    text = ack_email_text(case_id, subject, support_email=from_account, case_label=label)
     _send(db, from_account, to_email, ack_subject, text, html)
 
 

@@ -35,10 +35,56 @@ GET  /api/support/cases/{id}         case + unified timeline
 PATCH /api/support/cases/{id}        update status / priority / assigned_to
 POST /api/support/cases/{id}/reply   send manual reply
 POST /api/support/cases/{id}/note    add internal note
+POST /api/support/cases/{id}/transfer   move a case to another board (linked copy)
 GET  /api/support/stats              dashboard counts
 POST /api/support/check-mail         trigger mail check + SLA scan
 POST /api/support/check-sla          trigger SLA scan only (manual)
 ```
+
+---
+
+## Two Boards: Sales & Support
+
+Cases live in the same Firestore structure regardless of mailbox — each board is
+just a frontend filter, scoped by a small `BOARD_ACCOUNTS` list at the top of its
+page script:
+
+| Board | Page | Mailbox(es) | Case detail page |
+|---|---|---|---|
+| Sales | `index.html` | `sales@blueboot.ai` | `case_detail.html` |
+| Support | `support_index.html` | `support@blueboot.ai` | `support_case_detail.html` |
+
+To add another mailbox to a board later, edit the `BOARD_ACCOUNTS` array in that
+page — no backend change needed.
+
+**Case numbering** — each board has its own independent "Case #" sequence (Sales
+Case 1, 2, 3… and Support Case 1, 2, 3… in parallel). This is just the number shown
+on screen and in emails; internally every case still has a unique system ID so
+nothing is ever ambiguous.
+
+**Transfer a case** — if a case lands on the wrong board (e.g. a support request
+sent to sales@), open it and click **Transfer to Support**. This creates a linked
+copy on the Support board (with its own new board number) with the full message
+history, and **closes the original case** on its origin board (marked "Transferred")
+so its history isn't lost but it no longer shows as active there.
+
+**Board label on case rows** — every case ID shown anywhere in the UI is prefixed
+with its board name ("Sales Case 5", "Support Case 12"), including page titles,
+transfer confirmations, and transfer badges. This makes the board obvious at a
+glance without needing a separate colored badge.
+
+**Description column** — both board list pages show a short, auto-generated
+snippet of what each case is actually about, next to the Subject column. This is
+computed when a case is first created by stripping greeting lines, quoted replies,
+forwarded-message headers, and signatures from the first inbound email, then taking
+the first ~140 characters of what's left. It's a plain heuristic — no AI involved —
+so it's free and instant. Cases created before this feature shipped fall back to
+showing a truncated subject line instead.
+
+**Recognizing client mail** — both boards already share the same sender filter
+(skips bounce/auto-reply messages so they never create a case); there is no
+separate "client recognition" rule on either board, by design — every other
+inbound sender becomes a case.
 
 ---
 
@@ -97,8 +143,10 @@ blueboot-support/
 
   public/                         ← Static frontend
     login.html
-    index.html                    ← Cases board
-    case_detail.html              ← Case thread + reply composer
+    index.html                    ← Sales board (sales@blueboot.ai)
+    case_detail.html              ← Sales case thread + reply composer
+    support_index.html            ← Support board (support@blueboot.ai)
+    support_case_detail.html      ← Support case thread + reply composer
     css/styles.css
     js/
       firebase-config.js          ← Real config (gitignored)
@@ -144,6 +192,16 @@ and fill in your Firebase web app config + deployed API URL.
 functions-support\Tests\run_support.bat --create-user you@blueboot.ai --role admin
 ```
 
+### 5. Add a mailbox for a new board (e.g. support@)
+
+1. Create the mailbox in cPanel (see `doc/cpanel-email-setup.md` if present, or
+   the deliverability checklist shared separately).
+2. Add its credentials to Firestore at `settings/mail_accounts/accounts/support@blueboot.ai`
+   — same fields as `sales@blueboot.ai` (`username`, `password`, `host`/`imap_host`,
+   `smtp_host`, `port`/`imap_port`/`smtp_port`, `ssl`, `display_name`).
+3. That's it — `mail_checker.py` will start polling it, and `support_index.html`
+   already filters to `support@blueboot.ai` via its `BOARD_ACCOUNTS` constant.
+
 ---
 
 ## CLI Reference
@@ -164,6 +222,9 @@ bash Tests/run_support.sh [command]   ← Mac/Linux
 | `--check-mail` | Fetch new emails and create/update cases |
 | `--check-mail --dry-run` | Preview only — nothing written or sent |
 | `--reply ID --message "..."` | Send a reply to a case |
+| `--board-no ACCOUNT --times N` | Bump that mailbox's board-number counter N times (test the per-board sequence) |
+| `--transfer ID --to-account EMAIL` | Transfer a case to another board's mailbox — closes the original, creates a numbered copy on the destination |
+| `--transfer ID --to-account EMAIL --dry-run` | Preview a transfer — nothing written |
 | `--create-user EMAIL --role ROLE` | Create a support team member account |
 
 ---
@@ -199,18 +260,21 @@ Existing job: **`support-mail-check`**
 
 ```
 settings/support_meta
-  next_case_id: 10          ← auto-increments, do not edit
+  next_case_id: 10          ← global internal ID counter, auto-increments, do not edit
+  board_seq: { sales@blueboot.ai: 7, support@blueboot.ai: 3 }  ← per-board "Case #" counters, do not edit
   admin_emails: [...]       ← managed via --sync-settings
   dedup_days: 15            ← managed via --sync-settings
 
 support_mail_accounts/{account}/cases/{case_id}/
-  case_id, subject, from_email, from_name, mail_account
+  case_id, board_no, subject, from_email, from_name, mail_account
   status, priority, assigned_to, tags
   sla_deadline, sla_warning_sent
   created_at, updated_at, last_history_at, last_history_direction
+  transferred_to: { case_id, board_no, account }      ← set on the origin case (status → closed)
+  transferred_from: { case_id, board_no, account }    ← set on the new copy
 
   history/{auto_id}/    ← EMAIL_IN | EMAIL_OUT | NOTE
-  actions/{auto_id}/    ← created | status_changed | replied | email_received | …
+  actions/{auto_id}/    ← created | status_changed | replied | email_received | transferred_to | transferred_from
 
 support_email_index/{message_id}/   ← dedup — prevents double-processing
 ```

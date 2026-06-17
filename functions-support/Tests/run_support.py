@@ -10,6 +10,9 @@ Usage examples:
   python Tests/run_support.py --case 1112
   python Tests/run_support.py --reply 1112 "Thank you for reaching out."
   python Tests/run_support.py --create-user agent@blueboot.ai --role campaign-user
+  python Tests/run_support.py --board-no support@blueboot.ai --times 3
+  python Tests/run_support.py --transfer 1112 --to-account support@blueboot.ai
+  python Tests/run_support.py --transfer 1112 --to-account support@blueboot.ai --dry-run
 """
 from __future__ import annotations
 
@@ -119,14 +122,16 @@ def cmd_list_cases(args):
         print("\nNo cases found.\n")
         return
 
-    print(f"\n{'Case':<8} {'Status':<13} {'Pri':<8} {'Subject':<40} {'From':<30} {'Updated'}")
-    print("─" * 120)
+    print(f"\n{'Board#':<8} {'Account':<22} {'Status':<13} {'Pri':<8} {'Subject':<36} {'From':<26} {'Updated'}")
+    print("─" * 130)
     for d in docs:
         c = d.to_dict() or {}
-        subj = (c.get("subject") or "(no subject)")[:38]
-        frm  = (c.get("from_email") or "—")[:28]
-        print(f"  {str(c.get('case_id','?')):<6} {c.get('status','?'):<13} "
-              f"{c.get('priority','normal'):<8} {subj:<40} {frm:<30} {_fmt_date(c.get('updated_at'))}")
+        subj = (c.get("subject") or "(no subject)")[:34]
+        frm  = (c.get("from_email") or "—")[:24]
+        acct = (c.get("mail_account") or "—")[:20]
+        board_no = c.get("board_no", c.get("case_id", "?"))
+        print(f"  {str(board_no):<6} {acct:<22} {c.get('status','?'):<13} "
+              f"{c.get('priority','normal'):<8} {subj:<36} {frm:<26} {_fmt_date(c.get('updated_at'))}")
     print(f"\n{len(docs)} case(s) shown.\n")
 
 
@@ -138,14 +143,23 @@ def cmd_case(args):
         print(f"\nCase {case_id} not found.\n")
         return
 
+    from support_mail.mail_checker import _board_label
+    label = f"{_board_label(case.get('mail_account',''))} Case {case.get('board_no', case.get('case_id'))}"
+
     print(f"\n{'─'*60}")
-    print(f"  Case {case.get('case_id')}  [{case.get('status','?').upper()}]  priority={case.get('priority','normal')}")
+    print(f"  {label}  (case_id={case.get('case_id')})  [{case.get('status','?').upper()}]  priority={case.get('priority','normal')}")
     print(f"  Subject : {case.get('subject','(no subject)')}")
     print(f"  From    : {case.get('from_name','')} <{case.get('from_email','')}>")
     print(f"  Account : {case.get('mail_account','—')}")
     print(f"  Created : {_fmt_date(case.get('created_at'))}")
     print(f"  SLA     : {_fmt_date(case.get('sla_deadline'))}")
     print(f"  Tags    : {', '.join(case.get('tags') or []) or '—'}")
+    if case.get("transferred_to"):
+        t = case["transferred_to"]
+        print(f"  Transferred to : {t.get('account')} as board #{t.get('board_no')} (case_id={t.get('case_id')})")
+    if case.get("transferred_from"):
+        t = case["transferred_from"]
+        print(f"  Transferred from : {t.get('account')} board #{t.get('board_no')} (case_id={t.get('case_id')})")
     print(f"{'─'*60}\n  TIMELINE\n{'─'*60}")
 
     history = [
@@ -206,6 +220,108 @@ def cmd_check_mail(args):
     print()
 
 
+def cmd_board_no(args):
+    """Increment and print the per-board display counter N times.
+    Verifies _next_board_no() is atomic and scoped per-mailbox (two boards
+    never collide, each starts its own sequence at 1).
+    """
+    from support_mail.mail_checker import _next_board_no, _board_label
+    account = args.board_no.strip().lower()
+    times   = max(1, int(args.times or 1))
+    label   = _board_label(account)
+    print(f"\nIncrementing board counter for {account} ({label}) x{times}:")
+    for _ in range(times):
+        n = _next_board_no(db, account)
+        print(f"  -> {label} Case {n}")
+    print()
+
+
+def cmd_transfer(args):
+    """Transfer a case to another board's mailbox — same logic as the
+    POST /api/support/cases/<id>/transfer endpoint, run locally for testing.
+    Confirms: new board_no assigned on destination, history copied, and the
+    origin case is set to status=closed with a transferred_to back-reference.
+    """
+    from datetime import datetime, timezone
+    from support_mail.mail_checker import _next_case_id, _next_board_no, _board_label
+
+    case_id    = int(args.transfer)
+    to_account = args.to_account.strip().lower()
+    ref, case  = _find_case(case_id)
+    if not ref:
+        print(f"\nCase {case_id} not found.\n")
+        return
+    if case.get("mail_account") == to_account:
+        print(f"\nCase {case_id} is already on board {to_account}.\n")
+        return
+    if case.get("transferred_to"):
+        print(f"\nCase {case_id} was already transferred to case "
+              f"{case['transferred_to'].get('case_id')}.\n")
+        return
+
+    old_label = f"{_board_label(case.get('mail_account'))} Case {case.get('board_no', case_id)}"
+    print(f"\nTransfer {old_label} ({case.get('mail_account')}) -> {to_account}")
+    print(f"  Subject : {case.get('subject','')}")
+
+    if args.dry_run:
+        print("  (dry-run — no Firestore writes; board_no/case_id not consumed)\n")
+        return
+
+    confirm = input("\nProceed? [y/N] ").strip().lower()
+    if confirm != "y":
+        print("Aborted.\n")
+        return
+
+    now          = datetime.now(timezone.utc).isoformat()
+    new_case_id  = _next_case_id(db)
+    new_board_no = _next_board_no(db, to_account)
+    new_ref = (db.collection("support_mail_accounts")
+                 .document(to_account)
+                 .collection("cases")
+                 .document(str(new_case_id)))
+
+    new_case = dict(case)
+    new_case.pop("transferred_to", None)
+    new_case.update({
+        "case_id":          new_case_id,
+        "board_no":         new_board_no,
+        "mail_account":     to_account,
+        "status":           "new",
+        "created_at":       now,
+        "updated_at":       now,
+        "transferred_from": {
+            "case_id":  case.get("case_id"),
+            "board_no": case.get("board_no"),
+            "account":  case.get("mail_account"),
+        },
+    })
+    new_ref.set(new_case)
+    db.collection("support_mail_accounts").document(to_account).set({"email": to_account}, merge=True)
+
+    for h in ref.collection("history").order_by("timestamp").stream():
+        new_ref.collection("history").document(h.id).set(h.to_dict())
+
+    new_label = f"{_board_label(to_account)} Case {new_board_no}"
+    ref.collection("actions").document().set({
+        "type": "transferred_to", "by": "cli", "at": now,
+        "from_value": None, "to_value": None, "note": f"Transferred to {new_label}",
+    })
+    new_ref.collection("actions").document().set({
+        "type": "transferred_from", "by": "cli", "at": now,
+        "from_value": None, "to_value": None, "note": f"Transferred from {old_label}",
+    })
+
+    # Close the original case on its origin board.
+    ref.update({
+        "transferred_to": {"case_id": new_case_id, "board_no": new_board_no, "account": to_account},
+        "status":         "closed",
+        "updated_at":     now,
+    })
+
+    print(f"\nDone — {new_label} created (case_id={new_case_id}).")
+    print(f"Original {old_label} is now status=closed.\n")
+
+
 def cmd_reply(args):
     """Send a manual reply to a case."""
     case_id = int(args.reply)
@@ -214,10 +330,12 @@ def cmd_reply(args):
         print(f"\nCase {case_id} not found.\n")
         return
 
+    from support_mail.mail_checker import _board_label
     body         = args.message
     mail_account = case.get("mail_account","")
     to_email     = case.get("from_email","")
-    subject      = f"RE: Case {case_id}: {case.get('subject','')}"
+    case_label   = f"{_board_label(mail_account)} Case {case.get('board_no', case_id)}"
+    subject      = f"RE: {case_label}: {case.get('subject','')}"
 
     print(f"\nReply to  : {to_email}")
     print(f"From      : {mail_account}")
@@ -302,6 +420,10 @@ def main(argv=None):
     parser.add_argument("--check-mail",   action="store_true",  help="Fetch new emails")
     parser.add_argument("--reply",        metavar="CASE_ID",    help="Send reply to a case")
     parser.add_argument("--message",      metavar="TEXT",       help="Reply body (use with --reply)")
+    parser.add_argument("--board-no",     metavar="ACCOUNT",    help="Test/bump the per-board case counter for a mailbox")
+    parser.add_argument("--times",        metavar="N",          help="How many times to increment (use with --board-no)")
+    parser.add_argument("--transfer",     metavar="CASE_ID",    help="Transfer a case to another board")
+    parser.add_argument("--to-account",   metavar="EMAIL",      help="Destination mailbox (use with --transfer)")
     parser.add_argument("--create-user",  metavar="EMAIL",      help="Create a user account")
     parser.add_argument("--role",         default="campaign-user",
                         choices=VALID_ROLES,                    help="Role for --create-user")
@@ -331,6 +453,12 @@ def main(argv=None):
         if not args.message:
             parser.error("--reply requires --message")
         cmd_reply(args)
+    elif args.board_no:
+        cmd_board_no(args)
+    elif args.transfer:
+        if not args.to_account:
+            parser.error("--transfer requires --to-account")
+        cmd_transfer(args)
     elif args.create_user:
         cmd_create_user(args)
     else:

@@ -66,8 +66,10 @@ def _html_wrap(header_sub: str, body_content: str, footer_content: str) -> str:
 # ── Auto-acknowledgement ──────────────────────────────────────────────────────
 
 def ack_email_html(case_id: int, subject: str, from_name: str,
-                   support_email: str = "sales@blueboot.ai") -> str:
+                   support_email: str = "sales@blueboot.ai",
+                   case_label: str | None = None) -> str:
     """HTML acknowledgement sent to client when a new case is created."""
+    label     = case_label or f"Case {case_id}"
     greeting  = f"Hi {from_name.split()[0]}," if from_name else "Hello,"
     body = f"""
     <p class="greeting">{greeting}</p>
@@ -75,32 +77,34 @@ def ack_email_html(case_id: int, subject: str, from_name: str,
     message and created a support case for you.</p>
     <div class="case-card">
       <p class="case-label">Your case reference</p>
-      <p class="case-number">Case {case_id}</p>
+      <p class="case-number">{label}</p>
       <p class="case-subject">{subject}</p>
     </div>
     <p class="note">Our team will review your enquiry and respond as soon as possible.</p>
     <p class="note">To add more details or follow up, simply <strong>reply to this
-    email</strong> — your reply will be added to Case {case_id} automatically.</p>
+    email</strong> — your reply will be added to {label} automatically.</p>
     <p class="sla">We aim to respond within 1 business day.</p>
     <p class="sign">
       Best regards,<strong>The Blueboot Team</strong>
     </p>"""
     footer = f"""<p>To ensure your reply is linked to this case, please keep
-    <strong>Case {case_id}</strong> in the email subject.&nbsp;
+    <strong>{label}</strong> in the email subject.&nbsp;
     Need help? Contact us at
     <a href="mailto:{support_email}">{support_email}</a></p>"""
     return _html_wrap("We have received your message", body, footer)
 
 
-def ack_email_text(case_id: int, subject: str, support_email: str = "sales@blueboot.ai") -> str:
+def ack_email_text(case_id: int, subject: str, support_email: str = "sales@blueboot.ai",
+                   case_label: str | None = None) -> str:
     """Plain-text fallback for the acknowledgement."""
+    label = case_label or f"Case {case_id}"
     return (
         f"Thank you for reaching out to Blueboot.\n\n"
         f"Your support case has been created:\n"
-        f"  Case Number : Case {case_id}\n"
+        f"  Case Number : {label}\n"
         f"  Subject     : {subject}\n\n"
         f"Our team will respond within 1 business day.\n\n"
-        f"To follow up, reply to this email and keep 'Case {case_id}' in the subject "
+        f"To follow up, reply to this email and keep '{label}' in the subject "
         f"so your reply is linked automatically.\n\n"
         f"Best regards,\nThe Blueboot Team\n\n"
         f"---\nNeed help? Email {support_email}"

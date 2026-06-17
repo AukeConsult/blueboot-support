@@ -185,9 +185,10 @@ def send_reply(case_id: str):
         case         = ref.get().to_dict() or {}
         to_email     = case.get("from_email", "")
         mail_account = case.get("mail_account", "")
-        from support_mail.mail_checker import _clean_subject
+        from support_mail.mail_checker import _clean_subject, _board_label
         subject_line = _clean_subject(case.get("subject", ""))
-        subject      = f"RE: Case {case_id}: {subject_line}"
+        case_label   = f"{_board_label(mail_account)} Case {case.get('board_no', case_id)}"
+        subject      = f"RE: {case_label}: {subject_line}"
         agent        = getattr(g, "user_email", "agent")
 
         from support_mail.reply_sender import send_reply_email
@@ -243,6 +244,92 @@ def add_note(case_id: str):
         _log_action(ref, "note_added", by=agent)
         ref.update({"updated_at": now})
         return _ok("Note added")
+    except Exception as exc:
+        return _err(str(exc), 500)
+
+
+# ── POST /api/support/cases/<case_id>/transfer ────────────────────────────────
+
+@bp.route("/api/support/cases/<case_id>/transfer", methods=["POST"])
+def transfer_case(case_id: str):
+    """Create a linked copy of this case under a different mail account/board.
+
+    The original case stays exactly where it is (so its board history is
+    preserved); a new case is created on the target board with a fresh
+    case_id, the full message history copied over, and a back-reference in
+    both directions (`transferred_from` / `transferred_to`).
+    """
+    try:
+        db   = _db()
+        body = request.get_json(silent=True) or {}
+        to_account = (body.get("to_account") or "").strip().lower()
+        if not to_account:
+            return _err("to_account is required", 400)
+
+        ref = _find_case_ref(db, case_id)
+        if not ref:
+            return _err(f"Case {case_id} not found", 404)
+
+        case = ref.get().to_dict() or {}
+        if case.get("mail_account") == to_account:
+            return _err("Case is already on that board", 400)
+        if case.get("transferred_to"):
+            return _err(
+                f"Case already transferred to Case {case['transferred_to'].get('case_id')}", 400
+            )
+
+        agent = getattr(g, "user_email", "agent")
+        now   = _now_iso()
+
+        from support_mail.mail_checker import _next_case_id, _next_board_no, _board_label
+        new_case_id  = _next_case_id(db)
+        new_board_no = _next_board_no(db, to_account)
+        new_ref = (db.collection("support_mail_accounts")
+                     .document(to_account)
+                     .collection("cases")
+                     .document(str(new_case_id)))
+
+        new_case = dict(case)
+        new_case.pop("transferred_to", None)
+        new_case.update({
+            "case_id":           new_case_id,
+            "board_no":          new_board_no,
+            "mail_account":      to_account,
+            "status":            "new",
+            "created_at":        now,
+            "updated_at":        now,
+            "transferred_from":  {
+                "case_id":  case.get("case_id"),
+                "board_no": case.get("board_no"),
+                "account":  case.get("mail_account"),
+            },
+        })
+        new_ref.set(new_case)
+
+        # Ensure parent account doc exists
+        db.collection("support_mail_accounts").document(to_account).set(
+            {"email": to_account}, merge=True
+        )
+
+        # Copy full message history so the destination board has full context
+        for h in ref.collection("history").order_by("timestamp").stream():
+            new_ref.collection("history").document(h.id).set(h.to_dict())
+
+        old_label = f"{_board_label(case.get('mail_account'))} Case {case.get('board_no', case.get('case_id'))}"
+        new_label = f"{_board_label(to_account)} Case {new_board_no}"
+        _log_action(new_ref, "transferred_from", by=agent,
+                    note=f"Transferred from {old_label}")
+        _log_action(ref, "transferred_to", by=agent,
+                    note=f"Transferred to {new_label}")
+
+        # Original case is done on this board — close it (history stays intact)
+        ref.update({
+            "transferred_to": {"case_id": new_case_id, "board_no": new_board_no, "account": to_account},
+            "status":         "closed",
+            "updated_at":     now,
+        })
+
+        return _ok("Transferred", new_case_id=new_case_id, new_board_no=new_board_no, to_account=to_account)
     except Exception as exc:
         return _err(str(exc), 500)
 

@@ -66,6 +66,7 @@
 .bb-row:hover td { background: #fafafa; }
 .bb-case-id { font-weight: 600; color: var(--bb-indigo); font-size: .85rem; }
 .bb-subject { font-weight: 500; max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bb-desc { color: #6b7280; font-size: .8rem; max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ── Row status left accent ──────────────────────────────────────────────── */
 .bb-row-new td:first-child          { border-left: 3px solid #3b82f6; }
@@ -239,6 +240,9 @@
 .bb-quick-btn.fu:hover      { background: #fffbeb; }
 .bb-quick-btn.reopen        { border-color: #3b82f6; color: #2563eb; }
 .bb-quick-btn.reopen:hover  { background: #eff6ff; }
+.bb-quick-btn.transfer       { border-color: #a78bfa; color: #6d28d9; }
+.bb-quick-btn.transfer:hover { background: #f5f3ff; }
+.bb-quick-btn.transferred    { border-color: #d1d5db; color: #9ca3af; cursor: default; }
 
 /* ── Reply template selector ─────────────────────────────────────────────── */
 /* ── Auto-refresh indicator ──────────────────────────────────────────────── */

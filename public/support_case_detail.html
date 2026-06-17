@@ -12,8 +12,8 @@
 
 <nav class="navbar bb-navbar">
   <div class="container-fluid px-4">
-    <a class="navbar-brand bb-brand" href="index.html">
-      <i class="ti ti-arrow-left me-2" aria-hidden="true"></i>All cases
+    <a class="navbar-brand bb-brand" href="support_index.html">
+      <i class="ti ti-arrow-left me-2" aria-hidden="true"></i>All support cases
     </a>
     <div class="ms-auto d-flex align-items-center gap-2">
       <span id="user-email" class="small text-muted"></span>
@@ -39,6 +39,7 @@
             <i class="ti ti-inbox me-1" aria-hidden="true"></i><span id="case-account">—</span>
             &nbsp;·&nbsp;SLA:&nbsp;<span id="case-sla" class="fw-medium">—</span>
           </p>
+          <p class="small text-muted mb-0" id="case-transferred-from"></p>
         </div>
         <div class="d-flex gap-2 align-items-center flex-wrap">
           <select id="priority-select" class="form-select form-select-sm bb-status-select" title="Priority">
@@ -54,10 +55,6 @@
             <option value="closed">Closed</option>
           </select>
           <button id="save-meta-btn" class="btn btn-sm bb-btn-outline">Save</button>
-          <button id="transfer-btn" class="btn btn-sm bb-btn-outline d-none">
-            <i class="ti ti-arrow-right me-1" aria-hidden="true"></i>Transfer to Support
-          </button>
-          <span id="transferred-badge" class="small text-muted d-none"></span>
         </div>
       </div>
     </div>
@@ -123,11 +120,8 @@
 <script>
 const API    = window.SUPPORT_API;
 const caseId = new URLSearchParams(location.search).get("id");
-const BOARD_LABEL = "Sales";
-if (!caseId) window.location.href = "index.html";
-
-// Where "Transfer to Support" sends a case. Update if the support mailbox changes.
-const TRANSFER_TARGET_ACCOUNT = "support@blueboot.ai";
+const BOARD_LABEL = "Support";
+if (!caseId) window.location.href = "support_index.html";
 
 firebase.initializeApp(window.FIREBASE_CONFIG);
 const auth = firebase.auth();
@@ -233,6 +227,8 @@ function renderAction(a) {
     auto_replied:    "ti-mail-forward",
     email_received:  "ti-mail-down",
     created:         "ti-plus-circle",
+    transferred_from:"ti-arrow-left",
+    transferred_to:  "ti-arrow-right",
   };
   const icon  = icons[a.type] || "ti-point";
   const label = {
@@ -245,6 +241,8 @@ function renderAction(a) {
     auto_replied:     `Auto-reply sent`,
     email_received:   `Email received from <b>${escHtml(a.by)}</b>`,
     created:          `Case created${a.note ? " — " + escHtml(a.note) : ""}`,
+    transferred_from: `${a.note ? escHtml(a.note) : "Transferred in"}`,
+    transferred_to:   `${a.note ? escHtml(a.note) : "Transferred out"}`,
   }[a.type] || escHtml(a.type);
 
   return `
@@ -272,18 +270,12 @@ async function loadCase() {
     document.getElementById("priority-select").value    = data.priority || "normal";
     renderTimeline(data.timeline || []);
 
-    const transferBtn = document.getElementById("transfer-btn");
-    const transferredBadge = document.getElementById("transferred-badge");
-    if (data.transferred_to) {
-      transferBtn.classList.add("d-none");
-      transferredBadge.textContent = `Transferred (Support Case ${data.transferred_to.board_no || data.transferred_to.case_id})`;
-      transferredBadge.classList.remove("d-none");
-    } else if (data.mail_account === TRANSFER_TARGET_ACCOUNT) {
-      transferBtn.classList.add("d-none");
-      transferredBadge.classList.add("d-none");
+    const transferredFromEl = document.getElementById("case-transferred-from");
+    if (data.transferred_from) {
+      transferredFromEl.innerHTML =
+        `<i class="ti ti-arrow-left me-1" aria-hidden="true"></i>Transferred (Sales Case ${data.transferred_from.board_no || data.transferred_from.case_id})`;
     } else {
-      transferredBadge.classList.add("d-none");
-      transferBtn.classList.remove("d-none");
+      transferredFromEl.innerHTML = "";
     }
   } catch (e) {
     setFeedback(`<i class="ti ti-circle-x me-1"></i>${escHtml(e.message)}`, "danger");
@@ -359,24 +351,6 @@ async function addNote() {
     btn.innerHTML = '<i class="ti ti-note me-1"></i>Add note';
   }
 }
-// ── Transfer to Support ──────────────────────────────────────────────────
-async function transferCase() {
-  if (!confirm("Transfer this case to the Support board? A linked copy (with full history) will be created there; this case stays here too, marked as transferred.")) return;
-  const btn = document.getElementById("transfer-btn");
-  btn.disabled = true;
-  try {
-    const r = await fetchJSON(`/api/support/cases/${caseId}/transfer`, {
-      method: "POST",
-      body: JSON.stringify({ to_account: TRANSFER_TARGET_ACCOUNT }),
-    });
-    setFeedback(`<i class="ti ti-check me-1"></i>Transferred to Support as Support Case ${r.new_board_no || r.new_case_id}.`, "success");
-    await loadCase();
-  } catch (e) {
-    setFeedback(`<i class="ti ti-circle-x me-1"></i>${escHtml(e.message)}`, "danger");
-  } finally {
-    btn.disabled = false;
-  }
-}
 
 auth.onAuthStateChanged(async user => {
   if (!user) { window.location.href = "login.html"; return; }
@@ -394,7 +368,6 @@ document.getElementById("logout-btn").onclick    = () => auth.signOut().then(() 
 document.getElementById("send-btn").onclick      = sendReply;
 document.getElementById("note-btn").onclick      = addNote;
 document.getElementById("save-meta-btn").onclick = saveMeta;
-document.getElementById("transfer-btn").onclick  = transferCase;
 </script>
 </body>
 </html>
