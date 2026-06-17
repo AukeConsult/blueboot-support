@@ -73,13 +73,14 @@ with its board name ("Sales Case 5", "Support Case 12"), including page titles,
 transfer confirmations, and transfer badges. This makes the board obvious at a
 glance without needing a separate colored badge.
 
-**Description column** — both board list pages show a short, auto-generated
-snippet of what each case is actually about, next to the Subject column. This is
-computed when a case is first created by stripping greeting lines, quoted replies,
-forwarded-message headers, and signatures from the first inbound email, then taking
-the first ~140 characters of what's left. It's a plain heuristic — no AI involved —
-so it's free and instant. Cases created before this feature shipped fall back to
-showing a truncated subject line instead.
+**Description (currently off)** — every new case has a short, auto-generated
+snippet of its content stored on it (`description` field), computed by stripping
+greeting lines, quoted replies, forwarded-message headers, and signatures from the
+first inbound email and keeping the first ~140 characters of what's left. It's not
+shown as a separate column on the board lists right now — in practice it often
+matched the Subject too closely to be worth the extra column — but the data is
+still being captured on every new case in case it's useful later (e.g. on the case
+detail page, or as a tooltip).
 
 **Recognizing client mail** — both boards already share the same sender filter
 (skips bounce/auto-reply messages so they never create a case); there is no
