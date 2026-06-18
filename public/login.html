@@ -75,7 +75,7 @@ function hideErr() {
 }
 
 auth.onAuthStateChanged(user => {
-  if (user) window.location.href = "index.html";
+  if (user) window.location.href = "board.html";
 });
 
 // ── Google Sign-In ────────────────────────────────────────────────────────────
@@ -86,7 +86,7 @@ googleBtn.addEventListener("click", async () => {
   try {
     const provider = new firebase.auth.GoogleAuthProvider();
     await auth.signInWithPopup(provider);
-    window.location.href = "index.html";
+    window.location.href = "board.html";
   } catch (e) {
     showErr(e.message || "Google sign-in failed");
     googleBtn.disabled = false;
@@ -101,7 +101,7 @@ btn.addEventListener("click", async () => {
   btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Signing in…';
   try {
     await auth.signInWithEmailAndPassword(email.value.trim(), pass.value);
-    window.location.href = "index.html";
+    window.location.href = "board.html";
   } catch (e) {
     showErr(e.message || "Sign-in failed");
     btn.disabled = false;

@@ -16,6 +16,78 @@
 .bb-navbar { background: var(--bb-dark); border-bottom: 1px solid rgba(255,255,255,.08); }
 .bb-brand { color: #fff !important; font-weight: 600; font-size: 1rem; text-decoration: none; display: flex; align-items: center; }
 
+/* ── Global cross-channel search (navbar) ───────────────────────────────── */
+.bb-global-search { max-width: 360px; }
+.bb-global-search-icon {
+  position: absolute; left: .6rem; top: 50%; transform: translateY(-50%);
+  color: #9ca3af; font-size: .85rem; pointer-events: none;
+}
+.bb-global-search-input { padding-left: 1.9rem; background: rgba(255,255,255,.08); color: #fff; border: 1px solid rgba(255,255,255,.12); }
+.bb-global-search-input::placeholder { color: rgba(255,255,255,.45); }
+.bb-global-search-input:focus { background: #fff; color: #1f2937; }
+.bb-global-search-results {
+  position: absolute; top: calc(100% + 4px); left: 0; right: 0; z-index: 1050;
+  background: #fff; border-radius: var(--bb-radius); box-shadow: 0 8px 24px rgba(0,0,0,.18);
+  max-height: 360px; overflow-y: auto; padding: .4rem;
+}
+.bb-global-search-item {
+  display: flex; align-items: center; gap: .5rem; padding: .45rem .6rem;
+  border-radius: 6px; text-decoration: none; color: #1f2937; font-size: .85rem;
+}
+.bb-global-search-item:hover { background: #f3f4f6; }
+.bb-global-search-channel {
+  flex-shrink: 0; font-size: .68rem; font-weight: 600; text-transform: uppercase;
+  background: var(--bb-indigo-light); color: var(--bb-indigo); border-radius: 999px; padding: .15em .55em;
+}
+.bb-global-search-subject { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bb-global-search-from { flex-shrink: 0; font-size: .75rem; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bb-global-search-empty { padding: .6rem; font-size: .85rem; color: #6b7280; }
+
+/* ── Channel nav ─────────────────────────────────────────────────────────── */
+.bb-channel-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  padding: .75rem 1.5rem;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+}
+.bb-channel-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: .35rem .9rem;
+  border-radius: 999px;
+  font-size: .82rem;
+  font-weight: 500;
+  color: #4b5563;
+  background: #f3f4f6;
+  text-decoration: none;
+  border: 1px solid #f3f4f6;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.bb-channel-pill:hover       { background: #e5e7eb; color: #1f2937; text-decoration: none; }
+.bb-channel-pill.main        { border-color: var(--bb-indigo-light); }
+.bb-channel-pill.active      { background: var(--bb-indigo); color: #fff; border-color: var(--bb-indigo); }
+.bb-channel-pill.active:hover{ background: var(--bb-indigo); color: #fff; }
+.bb-channel-pill .bb-channel-pill-icon { font-size: .9rem; margin-right: .35rem; }
+.bb-channel-pill-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 .35rem;
+  margin-left: .4rem;
+  border-radius: 999px;
+  font-size: .68rem;
+  font-weight: 700;
+  background: #3b82f6;
+  color: #fff;
+}
+.bb-channel-pill.active .bb-channel-pill-badge { background: #fff; color: var(--bb-indigo); }
+.bb-channel-pill-badge.overdue { background: #dc2626; }
+.bb-channel-pill.active .bb-channel-pill-badge.overdue { background: #fff; color: #dc2626; }
+
 /* ── Login card ──────────────────────────────────────────────────────────── */
 .bb-login-card { background: #fff; border-radius: var(--bb-radius); padding: 2rem; width: 100%; max-width: 380px; box-shadow: 0 4px 24px rgba(0,0,0,.08); }
 .bb-brand-icon { width: 52px; height: 52px; background: var(--bb-indigo); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: #fff; }
@@ -127,12 +199,29 @@
 .bb-msg { border-radius: var(--bb-radius); padding: 1rem 1.125rem; max-width: 100%; }
 .bb-msg-in  { background: #fff; border: 1px solid #e5e7eb; border-left: 3px solid var(--bb-indigo); }
 .bb-msg-out { background: var(--bb-indigo-light); border: 1px solid #ddd9ff; border-left: 3px solid #a78bfa; }
-.bb-msg-header { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-bottom: .5rem; }
-.bb-msg-sender { font-weight: 600; font-size: .85rem; }
-.bb-msg-from { font-size: .8rem; color: #6b7280; }
-.bb-msg-time { font-size: .78rem; color: #9ca3af; margin-left: auto; }
-.bb-msg-body { font-size: .875rem; line-height: 1.65; color: #374151; white-space: pre-wrap; word-break: break-word; }
+.bb-msg-header { display: flex; align-items: center; gap: .5rem; flex-wrap: nowrap; margin-bottom: 0; cursor: pointer; user-select: none; }
+.bb-msg-sender { font-weight: 600; font-size: .85rem; flex-shrink: 0; }
+.bb-msg-from { font-size: .8rem; color: #6b7280; flex-shrink: 0; }
+.bb-msg-time { font-size: .78rem; color: #9ca3af; margin-left: auto; flex-shrink: 0; white-space: nowrap; }
+.bb-msg-body { font-size: .875rem; line-height: 1.65; color: #374151; white-space: pre-wrap; word-break: break-word; display: none; margin-top: .65rem; padding-left: 1.4rem; }
 .bb-auto-badge { font-size: .68rem; background: #e0e7ff; color: #3730a3; border-radius: 20px; padding: .15em .5em; font-weight: 500; }
+
+/* ── Collapsed/expanded message rows ─────────────────────────────────────── */
+.bb-msg-chevron { font-size: .8rem; color: #9ca3af; flex-shrink: 0; transition: transform .15s ease; }
+.bb-msg-snippet {
+  font-size: .8rem;
+  color: #9ca3af;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.bb-msg.bb-msg-expanded .bb-msg-chevron { transform: rotate(90deg); color: #6b7280; }
+.bb-msg.bb-msg-expanded .bb-msg-snippet { display: none; }
+.bb-msg.bb-msg-expanded .bb-msg-body { display: block; }
+.bb-msg.bb-msg-expanded { padding-bottom: 1.125rem; }
+.bb-msg:not(.bb-msg-expanded) { padding-top: .65rem; padding-bottom: .65rem; }
 
 /* ── Reply card ──────────────────────────────────────────────────────────── */
 .bb-reply-card { border: none; box-shadow: 0 1px 4px rgba(0,0,0,.06); border-radius: var(--bb-radius); }

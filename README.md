@@ -30,47 +30,120 @@ Agent replies manually from the board
 
 **API endpoints:**
 ```
-GET  /api/support/cases              list all cases
+GET  /api/support/cases              list all cases (?account=, ?status=, ?priority=, ?q=, ?limit=)
 GET  /api/support/cases/{id}         case + unified timeline
 PATCH /api/support/cases/{id}        update status / priority / assigned_to
 POST /api/support/cases/{id}/reply   send manual reply
 POST /api/support/cases/{id}/note    add internal note
-POST /api/support/cases/{id}/transfer   move a case to another board (linked copy)
+POST /api/support/cases/{id}/transfer   move a case to another channel (linked copy)
+GET  /api/support/channels           list every configured channel (account, label, is_main, unread/overdue counts)
+GET  /api/support/channels/{account} full channel config, password excluded — admin only
+POST /api/support/channels           create a new channel/mailbox — admin only
+PATCH /api/support/channels/{account} update a channel's settings/credentials — admin only
+DELETE /api/support/channels/{account} remove a channel (refuses to delete the main channel) — admin only
+GET  /api/support/me                 current signed-in user's email + role
 GET  /api/support/stats              dashboard counts
 POST /api/support/check-mail         trigger mail check + SLA scan
 POST /api/support/check-sla          trigger SLA scan only (manual)
 ```
 
+`GET /api/support/cases` with no `?account=` searches every channel at once — this
+powers the cross-channel search box in the board navbar.
+
 ---
 
-## Two Boards: Sales & Support
+## Channels: Support is the main channel
 
-Cases live in the same Firestore structure regardless of mailbox — each board is
-just a frontend filter, scoped by a small `BOARD_ACCOUNTS` list at the top of its
-page script:
+Cases live in the same Firestore structure regardless of mailbox. Every configured
+mailbox (`settings/mail_accounts/accounts/{email}`) is its own **channel** on a
+single, generic board page — there is no longer one HTML file per mailbox. Support
+is the **main channel**: every other channel can transfer a case into it, but it
+can't transfer into anything else.
 
-| Board | Page | Mailbox(es) | Case detail page |
-|---|---|---|---|
-| Sales | `index.html` | `sales@blueboot.ai` | `case_detail.html` |
-| Support | `support_index.html` | `support@blueboot.ai` | `support_case_detail.html` |
+| Page | Purpose |
+|---|---|
+| `board.html?account=<email>` | The channel board — case list, stats, filters, for one mailbox |
+| `case_detail.html?id=<caseId>` | The single canonical case detail page, for any channel |
 
-To add another mailbox to a board later, edit the `BOARD_ACCOUNTS` array in that
-page — no backend change needed.
+Visiting `board.html` with no `?account=` defaults to the main channel (Support).
+A pill nav at the top of both pages (rendered by `js/channels.js` from
+`GET /api/support/channels`) lists every channel and links to its board, so the
+nav updates automatically as channels are added, renamed, or removed — no HTML
+changes needed.
 
-**Case numbering** — each board has its own independent "Case #" sequence (Sales
-Case 1, 2, 3… and Support Case 1, 2, 3… in parallel). This is just the number shown
-on screen and in emails; internally every case still has a unique system ID so
-nothing is ever ambiguous.
+`index.html`, `support_index.html`, and `support_case_detail.html` are now thin
+redirect stubs (to `board.html?account=sales@blueboot.ai`,
+`board.html?account=support@blueboot.ai`, and `case_detail.html?id=...`
+respectively) kept only so old bookmarks keep working.
 
-**Transfer a case** — if a case lands on the wrong board (e.g. a support request
-sent to sales@), open it and click **Transfer to Support**. This creates a linked
-copy on the Support board (with its own new board number) with the full message
-history, and **closes the original case** on its origin board (marked "Transferred")
-so its history isn't lost but it no longer shows as active there.
+**`GET /api/support/channels`** returns:
+```json
+{
+  "channels": [
+    { "account": "support@blueboot.ai", "label": "Support", "is_main": true,
+      "unread_count": 2, "overdue_count": 0 },
+    { "account": "sales@blueboot.ai",   "label": "Sales",   "is_main": false,
+      "unread_count": 0, "overdue_count": 1 },
+    { "account": "contact@blueboot.ai", "label": "Contact",  "is_main": false,
+      "unread_count": 0, "overdue_count": 0 }
+  ]
+}
+```
+Sorted main-channel-first, then alphabetically by label. `label` and `is_main` are
+optional fields on each `settings/mail_accounts/accounts/{email}` document — if
+either is missing, the email's local part (before the `@`) is used as the label
+and the account is treated as a non-main channel, except `support@blueboot.ai`
+which falls back to "Support" / main for backward compatibility. `unread_count`
+(active cases whose last message is from the customer) and `overdue_count`
+(active cases past their SLA deadline) are shown as small badges on each
+channel's pill in the nav — red for overdue, blue otherwise, overdue takes
+priority when a channel has both.
+
+**Managing channels (admins only)** — click **Channels** in the navbar (only
+visible to admins) to open `channels_admin.html`, a page to add, edit, or delete
+mailboxes without touching Firestore directly. Creating or editing a channel
+still requires the same fields as the manual Firestore setup below (IMAP/SMTP
+host, port, SSL, username, password); editing leaves the password unchanged if
+the field is left blank. The main channel can't be deleted. These write actions
+call `POST` / `PATCH` / `DELETE /api/support/channels[/{account}]`, which are
+restricted to `role=admin` regardless of the signed-in user's blueprint-level
+access — see Roles below. `GET /api/support/me` is what the board uses to decide
+whether to show the **Channels** link for the current user.
+
+**Finding a case across every channel** — the search box in the board's navbar
+(`board.html`) searches subject and sender across all channels at once, not just
+the one currently open, using the same `GET /api/support/cases?q=` the per-board
+search box uses, just without an `?account=` filter. Each result shows which
+channel it belongs to.
+
+**"My cases" filter** — a toggle on the board filters the visible list down to
+cases whose `assigned_to` matches the signed-in user's email.
+
+**Adding a new channel** — no code or HTML changes needed:
+1. Add the mailbox to `settings/mail_accounts/accounts/{email}` in Firestore
+   (IMAP/SMTP credentials, same shape as the existing accounts).
+2. Optionally set `label` (e.g. `"Contact"`) — defaults to the email's local part.
+3. Leave `is_main` unset (or `false`) — only Support should be `true`.
+4. The new channel appears in the pill nav and at
+   `board.html?account=<email>` automatically next time the page loads.
+
+**Case numbering** — each channel has its own independent "Case #" sequence
+(Sales Case 1, 2, 3… and Support Case 1, 2, 3… in parallel). This is just the
+number shown on screen and in emails; internally every case still has a unique
+system ID so nothing is ever ambiguous.
+
+**Transfer a case** — if a case lands on the wrong channel (e.g. a support
+request sent to sales@), open it and click **Transfer to Support** (every
+non-main channel shows this button; the label always names the current main
+channel). This creates a linked copy on the Support board (with its own new
+board number) with the full message history, and **closes the original case**
+on its origin channel (marked "Transferred") so its history isn't lost but it
+no longer shows as active there.
 
 **Board label on case rows** — every case ID shown anywhere in the UI is prefixed
-with its board name ("Sales Case 5", "Support Case 12"), including page titles,
-transfer confirmations, and transfer badges. This makes the board obvious at a
+with its channel name ("Sales Case 5", "Support Case 12", "Contact Case 3"),
+resolved dynamically from `/api/support/channels`, including page titles,
+transfer confirmations, and transfer badges. This makes the channel obvious at a
 glance without needing a separate colored badge.
 
 **Description (currently off)** — every new case has a short, auto-generated
@@ -82,9 +155,9 @@ matched the Subject too closely to be worth the extra column — but the data is
 still being captured on every new case in case it's useful later (e.g. on the case
 detail page, or as a tooltip).
 
-**Recognizing client mail** — both boards already share the same sender filter
+**Recognizing client mail** — every channel shares the same sender filter
 (skips bounce/auto-reply messages so they never create a case); there is no
-separate "client recognition" rule on either board, by design — every other
+separate "client recognition" rule per channel, by design — every other
 inbound sender becomes a case.
 
 ---
@@ -109,8 +182,8 @@ Shared with CRM. Set in Firestore `settings/users/users/{email}.role`.
 
 | Role | Access |
 |---|---|
-| `campaign-user` | Full access — reply, update, add notes |
-| `admin` | Full access |
+| `campaign-user` | Full access — reply, update, add notes. Cannot add/edit/delete channels. |
+| `admin` | Full access, including adding/editing/deleting channels (mailbox credentials) |
 | `user` | Read-only |
 | `guest` | Blocked |
 
@@ -144,12 +217,15 @@ blueboot-support/
 
   public/                         ← Static frontend
     login.html
-    index.html                    ← Sales board (sales@blueboot.ai)
-    case_detail.html              ← Sales case thread + reply composer
-    support_index.html            ← Support board (support@blueboot.ai)
-    support_case_detail.html      ← Support case thread + reply composer
+    board.html                    ← Generic channel board (?account=<email>; defaults to Support)
+    case_detail.html              ← Canonical case thread + reply composer, any channel
+    channels_admin.html           ← Add/edit/delete channels — admin only
+    index.html                    ← Redirect stub → board.html?account=sales@blueboot.ai
+    support_index.html            ← Redirect stub → board.html?account=support@blueboot.ai
+    support_case_detail.html      ← Redirect stub → case_detail.html?id=...
     css/styles.css
     js/
+      channels.js                 ← Shared channel-nav module (fetches /api/support/channels)
       firebase-config.js          ← Real config (gitignored)
       firebase-config.example.js  ← Template (committed)
 ```
@@ -193,15 +269,19 @@ and fill in your Firebase web app config + deployed API URL.
 functions-support\Tests\run_support.bat --create-user you@blueboot.ai --role admin
 ```
 
-### 5. Add a mailbox for a new board (e.g. support@)
+### 5. Add a mailbox for a new channel (e.g. contact@)
 
 1. Create the mailbox in cPanel (see `doc/cpanel-email-setup.md` if present, or
    the deliverability checklist shared separately).
-2. Add its credentials to Firestore at `settings/mail_accounts/accounts/support@blueboot.ai`
+2. Add its credentials to Firestore at `settings/mail_accounts/accounts/contact@blueboot.ai`
    — same fields as `sales@blueboot.ai` (`username`, `password`, `host`/`imap_host`,
-   `smtp_host`, `port`/`imap_port`/`smtp_port`, `ssl`, `display_name`).
-3. That's it — `mail_checker.py` will start polling it, and `support_index.html`
-   already filters to `support@blueboot.ai` via its `BOARD_ACCOUNTS` constant.
+   `smtp_host`, `port`/`imap_port`/`smtp_port`, `ssl`, `display_name`), plus an
+   optional `label` (e.g. `"Contact"` — defaults to the email's local part if
+   omitted). Leave `is_main` unset; only Support is the main channel.
+3. That's it — `mail_checker.py` will start polling it, and it appears
+   automatically in the channel pill nav and at
+   `board.html?account=contact@blueboot.ai` — see "Channels: Support is the
+   main channel" above for details. No HTML or code changes needed.
 
 ---
 

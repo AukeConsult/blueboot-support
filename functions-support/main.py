@@ -28,8 +28,9 @@ CORS(app)
 from handlers.cases      import bp as cases_bp
 from handlers.mail_check import bp as mail_check_bp
 from handlers.sla_check  import bp as sla_check_bp
+from handlers.channels   import bp as channels_bp
 
-for bp in (cases_bp, mail_check_bp, sla_check_bp):
+for bp in (cases_bp, mail_check_bp, sla_check_bp, channels_bp):
     app.register_blueprint(bp)
 
 # ── Minimum role per blueprint for mutating requests ─────────────────────────
@@ -38,6 +39,11 @@ _BLUEPRINT_MIN_ROLES: dict[str, str] = {
     "cases":      "campaign-user",
     "mail_check": "campaign-user",
     "sla_check":  "campaign-user",
+    # GET is read-only for any signed-in user; POST/PATCH/DELETE (channel
+    # create/edit/delete, which include mailbox credentials) are additionally
+    # gated to role=admin inside handlers/channels.py (_require_admin), since
+    # campaign-user is too broad for write access to mailbox passwords.
+    "channels":   "campaign-user",
 }
 
 # ── Auth middleware ───────────────────────────────────────────────────────────
@@ -92,6 +98,15 @@ def check_auth():
         min_level = ROLE_LEVELS.get(min_role, 2)
         if ROLE_LEVELS.get(role, 0) < min_level:
             return _err(f"Requires role: {min_role}", 403)
+
+
+# ── GET /api/support/me — current user's email + role ────────────────────────
+# Lets the frontend show/hide admin-only UI (e.g. the channel management
+# link) without guessing from a failed write call.
+
+@app.route("/api/support/me", methods=["GET"])
+def whoami():
+    return jsonify({"email": g.user_email, "role": g.user_role})
 
 
 # ── Cloud Function entry point ────────────────────────────────────────────────

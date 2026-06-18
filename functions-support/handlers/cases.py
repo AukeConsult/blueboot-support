@@ -187,7 +187,7 @@ def send_reply(case_id: str):
         mail_account = case.get("mail_account", "")
         from support_mail.mail_checker import _clean_subject, _board_label
         subject_line = _clean_subject(case.get("subject", ""))
-        case_label   = f"{_board_label(mail_account)} Case {case.get('board_no', case_id)}"
+        case_label   = f"{_board_label(mail_account, db)} Case {case.get('board_no', case_id)}"
         subject      = f"RE: {case_label}: {subject_line}"
         agent        = getattr(g, "user_email", "agent")
 
@@ -315,8 +315,8 @@ def transfer_case(case_id: str):
         for h in ref.collection("history").order_by("timestamp").stream():
             new_ref.collection("history").document(h.id).set(h.to_dict())
 
-        old_label = f"{_board_label(case.get('mail_account'))} Case {case.get('board_no', case.get('case_id'))}"
-        new_label = f"{_board_label(to_account)} Case {new_board_no}"
+        old_label = f"{_board_label(case.get('mail_account'), db)} Case {case.get('board_no', case.get('case_id'))}"
+        new_label = f"{_board_label(to_account, db)} Case {new_board_no}"
         _log_action(new_ref, "transferred_from", by=agent,
                     note=f"Transferred from {old_label}")
         _log_action(ref, "transferred_to", by=agent,

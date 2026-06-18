@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Channels — Blueboot Support</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bb-app">
+
+<nav class="navbar bb-navbar">
+  <div class="container-fluid px-4">
+    <a class="navbar-brand bb-brand" href="board.html">
+      <i class="ti ti-arrow-left me-2" aria-hidden="true"></i>All cases
+    </a>
+    <div class="ms-auto d-flex align-items-center gap-3">
+      <span id="user-email" class="small" style="color:rgba(255,255,255,0.6)"></span>
+      <button id="logout-btn" class="btn btn-sm btn-link p-0" style="color:rgba(255,255,255,0.5)">Sign out</button>
+    </div>
+  </div>
+</nav>
+
+<main class="container py-4" style="max-width:900px">
+
+  <div id="guard-notice" class="alert alert-warning d-none">
+    <i class="ti ti-lock me-1" aria-hidden="true"></i>
+    Channel management is restricted to admins.
+  </div>
+
+  <div id="admin-area" class="d-none">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <div>
+        <h1 class="h5 fw-semibold mb-0">Channels</h1>
+        <p class="small text-muted mb-0">Mailboxes that feed cases into the boards. Support is the main channel.</p>
+      </div>
+      <button id="add-channel-btn" class="btn bb-btn-primary">
+        <i class="ti ti-plus me-1" aria-hidden="true"></i>Add channel
+      </button>
+    </div>
+
+    <div id="feedback" class="alert py-2 px-3 small mb-3 d-none" role="status"></div>
+
+    <div class="card bb-table-card">
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table bb-table mb-0">
+            <thead class="bb-thead">
+              <tr>
+                <th style="width:240px">Account</th>
+                <th style="width:160px;min-width:120px">Label</th>
+                <th style="width:90px">Main</th>
+                <th style="width:90px">Unread</th>
+                <th style="width:90px">Overdue</th>
+                <th style="width:160px">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="channels-tbody">
+              <tr><td colspan="6" class="text-center text-muted py-5">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- Add / edit channel modal -->
+<div class="modal fade" id="channel-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title h6" id="channel-modal-title">Add channel</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="modal-feedback" class="alert py-2 px-3 small mb-3 d-none" role="status"></div>
+        <form id="channel-form">
+          <div class="row g-3">
+            <div class="col-12 col-md-6">
+              <label class="form-label small fw-medium" for="f-account">Account email</label>
+              <input type="email" class="form-control form-control-sm" id="f-account" required>
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label small fw-medium" for="f-label">Display label</label>
+              <input type="text" class="form-control form-control-sm" id="f-label" placeholder="e.g. Sales">
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label small fw-medium" for="f-display_name">From name</label>
+              <input type="text" class="form-control form-control-sm" id="f-display_name">
+            </div>
+            <div class="col-12 col-md-6 d-flex align-items-end">
+              <div class="form-check form-switch mb-1">
+                <input class="form-check-input" type="checkbox" id="f-is_main">
+                <label class="form-check-label small" for="f-is_main">This is the main channel (Support)</label>
+              </div>
+            </div>
+
+            <div class="col-12"><hr class="my-1"></div>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label small fw-medium" for="f-username">Mailbox username</label>
+              <input type="text" class="form-control form-control-sm" id="f-username">
+            </div>
+            <div class="col-12 col-md-6">
+              <label class="form-label small fw-medium" for="f-password">Password</label>
+              <input type="password" class="form-control form-control-sm" id="f-password"
+                     autocomplete="new-password">
+              <div class="form-text" id="password-hint"></div>
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label small fw-medium" for="f-imap_host">IMAP host</label>
+              <input type="text" class="form-control form-control-sm" id="f-imap_host">
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label small fw-medium" for="f-imap_port">IMAP port</label>
+              <input type="number" class="form-control form-control-sm" id="f-imap_port" value="993">
+            </div>
+            <div class="col-6 col-md-3 d-flex align-items-end">
+              <div class="form-check form-switch mb-1">
+                <input class="form-check-input" type="checkbox" id="f-ssl" checked>
+                <label class="form-check-label small" for="f-ssl">SSL</label>
+              </div>
+            </div>
+
+            <div class="col-12 col-md-6">
+              <label class="form-label small fw-medium" for="f-smtp_host">SMTP host</label>
+              <input type="text" class="form-control form-control-sm" id="f-smtp_host">
+            </div>
+            <div class="col-6 col-md-3">
+              <label class="form-label small fw-medium" for="f-smtp_port">SMTP port</label>
+              <input type="number" class="form-control form-control-sm" id="f-smtp_port" value="465">
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn bb-btn-outline" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn bb-btn-primary" id="channel-save-btn">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/firebase-config.js"></script>
+<script>
+const API = window.SUPPORT_API;
+
+firebase.initializeApp(window.FIREBASE_CONFIG);
+const auth = firebase.auth();
+
+let _channels  = [];
+let _editing   = null;   // account string when editing, null when creating
+let _modal     = null;
+
+async function getToken() {
+  return auth.currentUser ? auth.currentUser.getIdToken() : null;
+}
+
+async function fetchJSON(path, opts = {}) {
+  const token = await getToken();
+  const res = await fetch(API + path, {
+    ...opts,
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type":  "application/json",
+      ...(opts.headers || {}),
+    },
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+  return res.json();
+}
+
+function escHtml(s) {
+  return (s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function setFeedback(msg, type) {
+  const fb = document.getElementById("feedback");
+  if (!type) { fb.classList.add("d-none"); return; }
+  fb.className = `alert alert-${type} py-2 px-3 small mb-3`;
+  fb.innerHTML = msg;
+  fb.classList.remove("d-none");
+}
+
+function setModalFeedback(msg, type) {
+  const fb = document.getElementById("modal-feedback");
+  if (!type) { fb.classList.add("d-none"); return; }
+  fb.className = `alert alert-${type} py-2 px-3 small mb-3`;
+  fb.innerHTML = msg;
+  fb.classList.remove("d-none");
+}
+
+// ── Render table ──────────────────────────────────────────────────────────
+
+function renderChannels() {
+  const tbody = document.getElementById("channels-tbody");
+  if (!_channels.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-5">No channels configured</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = _channels.map(c => `
+    <tr>
+      <td>${escHtml(c.account)}</td>
+      <td>${escHtml(c.label || "—")}</td>
+      <td>${c.is_main ? '<span class="badge bb-badge-info">Main</span>' : ""}</td>
+      <td>${c.unread_count || 0}</td>
+      <td>${c.overdue_count || 0}</td>
+      <td>
+        <div class="bb-quick-actions">
+          <button class="bb-quick-btn" onclick="openEdit('${escHtml(c.account)}')">
+            <i class="ti ti-pencil" style="font-size:.7rem"></i> Edit
+          </button>
+          <button class="bb-quick-btn ni" onclick="deleteChannel('${escHtml(c.account)}')"
+                  ${c.is_main ? "disabled title=\"Can't delete the main channel\"" : ""}>
+            <i class="ti ti-trash" style="font-size:.7rem"></i> Delete
+          </button>
+        </div>
+      </td>
+    </tr>`).join("");
+}
+
+async function loadChannels() {
+  try {
+    const data = await fetchJSON("/api/support/channels");
+    _channels = data.channels || [];
+    renderChannels();
+  } catch (e) {
+    document.getElementById("channels-tbody").innerHTML =
+      `<tr><td colspan="6" class="text-center text-danger py-4">${escHtml(e.message)}</td></tr>`;
+  }
+}
+
+// ── Add / edit modal ──────────────────────────────────────────────────────
+
+function clearForm() {
+  document.getElementById("channel-form").reset();
+  document.getElementById("f-imap_port").value = 993;
+  document.getElementById("f-smtp_port").value = 465;
+  document.getElementById("f-ssl").checked = true;
+  document.getElementById("f-account").disabled = false;
+  setModalFeedback(null);
+}
+
+function openAdd() {
+  _editing = null;
+  clearForm();
+  document.getElementById("channel-modal-title").textContent = "Add channel";
+  document.getElementById("password-hint").textContent = "";
+  _modal.show();
+}
+
+async function openEdit(account) {
+  _editing = account;
+  clearForm();
+  document.getElementById("channel-modal-title").textContent = `Edit ${account}`;
+  document.getElementById("password-hint").textContent = "Leave blank to keep the existing password.";
+  document.getElementById("f-account").disabled = true;
+  _modal.show();
+  try {
+    const c = await fetchJSON(`/api/support/channels/${encodeURIComponent(account)}`);
+    document.getElementById("f-account").value      = c.account || account;
+    document.getElementById("f-label").value         = c.label || "";
+    document.getElementById("f-display_name").value  = c.display_name || "";
+    document.getElementById("f-is_main").checked      = !!c.is_main;
+    document.getElementById("f-username").value       = c.username || "";
+    document.getElementById("f-imap_host").value      = c.imap_host || "";
+    document.getElementById("f-imap_port").value       = c.imap_port || 993;
+    document.getElementById("f-ssl").checked           = c.ssl !== false;
+    document.getElementById("f-smtp_host").value      = c.smtp_host || "";
+    document.getElementById("f-smtp_port").value       = c.smtp_port || 465;
+  } catch (e) {
+    setModalFeedback(`<i class="ti ti-circle-x me-1"></i>${escHtml(e.message)}`, "danger");
+  }
+}
+
+async function saveChannel() {
+  const btn = document.getElementById("channel-save-btn");
+  const body = {
+    label:        document.getElementById("f-label").value.trim(),
+    display_name: document.getElementById("f-display_name").value.trim(),
+    is_main:      document.getElementById("f-is_main").checked,
+    username:     document.getElementById("f-username").value.trim(),
+    imap_host:    document.getElementById("f-imap_host").value.trim(),
+    imap_port:    parseInt(document.getElementById("f-imap_port").value, 10) || 993,
+    ssl:          document.getElementById("f-ssl").checked,
+    smtp_host:    document.getElementById("f-smtp_host").value.trim(),
+    smtp_port:    parseInt(document.getElementById("f-smtp_port").value, 10) || 465,
+  };
+  const password = document.getElementById("f-password").value;
+  if (password) body.password = password;
+
+  btn.disabled = true;
+  try {
+    if (_editing) {
+      await fetchJSON(`/api/support/channels/${encodeURIComponent(_editing)}`, {
+        method: "PATCH",
+        body: JSON.stringify(body),
+      });
+      setFeedback(`<i class="ti ti-check me-1"></i>Channel ${escHtml(_editing)} updated.`, "success");
+    } else {
+      const account = document.getElementById("f-account").value.trim().toLowerCase();
+      if (!account || !account.includes("@")) {
+        setModalFeedback("A valid account email is required.", "warning");
+        btn.disabled = false;
+        return;
+      }
+      if (!password) {
+        setModalFeedback("Password is required when creating a channel.", "warning");
+        btn.disabled = false;
+        return;
+      }
+      if (!body.username || !body.imap_host || !body.smtp_host) {
+        setModalFeedback("Username, IMAP host, and SMTP host are required.", "warning");
+        btn.disabled = false;
+        return;
+      }
+      body.account = account;
+      await fetchJSON("/api/support/channels", {
+        method: "POST",
+        body: JSON.stringify(body),
+      });
+      setFeedback(`<i class="ti ti-check me-1"></i>Channel ${escHtml(account)} created.`, "success");
+    }
+    _modal.hide();
+    await loadChannels();
+    setTimeout(() => setFeedback(null), 4000);
+  } catch (e) {
+    setModalFeedback(`<i class="ti ti-circle-x me-1"></i>${escHtml(e.message)}`, "danger");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function deleteChannel(account) {
+  if (!confirm(`Delete channel ${account}? Its existing cases stay accessible but it will stop being polled and disappear from the channel nav.`)) return;
+  try {
+    await fetchJSON(`/api/support/channels/${encodeURIComponent(account)}`, { method: "DELETE" });
+    setFeedback(`<i class="ti ti-check me-1"></i>Channel ${escHtml(account)} deleted.`, "success");
+    await loadChannels();
+    setTimeout(() => setFeedback(null), 4000);
+  } catch (e) {
+    setFeedback(`<i class="ti ti-circle-x me-1"></i>${escHtml(e.message)}`, "danger");
+  }
+}
+
+// ── Admin guard + init ───────────────────────────────────────────────────
+
+auth.onAuthStateChanged(async user => {
+  if (!user) { window.location.href = "login.html"; return; }
+  document.getElementById("user-email").textContent = user.email;
+
+  _modal = new bootstrap.Modal(document.getElementById("channel-modal"));
+
+  try {
+    const me = await fetchJSON("/api/support/me");
+    if (me.role !== "admin") {
+      document.getElementById("guard-notice").classList.remove("d-none");
+      return;
+    }
+  } catch (e) {
+    document.getElementById("guard-notice").classList.remove("d-none");
+    return;
+  }
+
+  document.getElementById("admin-area").classList.remove("d-none");
+  await loadChannels();
+});
+
+document.getElementById("logout-btn").onclick     = () => auth.signOut().then(() => { window.location.href = "login.html"; });
+document.getElementById("add-channel-btn").onclick = openAdd;
+document.getElementById("channel-save-btn").onclick = saveChannel;
+</script>
+</body>
+</html>

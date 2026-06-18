@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cases — Blueboot Support</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bb-app">
+
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg bb-navbar">
+  <div class="container-fluid px-4">
+    <a class="navbar-brand bb-brand" href="board.html" id="brand-link">
+      <i class="ti ti-headset me-2" aria-hidden="true"></i><span id="brand-label">Cases</span>
+    </a>
+    <div class="bb-global-search flex-grow-1 mx-3 d-none d-md-block">
+      <div class="position-relative">
+        <i class="ti ti-search bb-global-search-icon" aria-hidden="true"></i>
+        <input type="search" id="global-search-input" class="form-control form-control-sm bb-global-search-input"
+               placeholder="Search all channels…" autocomplete="off">
+        <div id="global-search-results" class="bb-global-search-results d-none"></div>
+      </div>
+    </div>
+    <div class="ms-auto d-flex align-items-center gap-3">
+      <span class="small" style="color:rgba(255,255,255,0.4)">
+        <span class="bb-refresh-dot" id="refresh-dot" title="Auto-refreshes every 2 min"></span>
+      </span>
+      <span id="user-email" class="small" style="color:rgba(255,255,255,0.6)"></span>
+      <a id="channels-admin-link" href="channels_admin.html" class="btn btn-sm bb-btn-outline-light d-none">
+        <i class="ti ti-settings me-1" aria-hidden="true"></i>Channels
+      </a>
+      <button id="check-btn" class="btn btn-sm bb-btn-outline-light">
+        <i class="ti ti-refresh me-1" aria-hidden="true"></i>Check mail
+      </button>
+      <button id="logout-btn" class="btn btn-sm btn-link p-0" style="color:rgba(255,255,255,0.5)">Sign out</button>
+    </div>
+  </div>
+</nav>
+
+<!-- Channel nav -->
+<div id="channel-nav" class="bb-channel-nav"></div>
+
+<main class="container-fluid px-4 py-4">
+
+  <!-- Stats row -->
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+      <div class="bb-stat-card bb-stat-card-new">
+        <div class="bb-stat-header">
+          <div class="bb-stat-icon bb-stat-icon-new"><i class="ti ti-inbox"></i></div>
+          <span class="bb-stat-label">New</span>
+        </div>
+        <div class="bb-stat-value text-primary" id="stat-new">—</div>
+        <div class="bb-stat-sub">awaiting reply</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="bb-stat-card bb-stat-card-followup">
+        <div class="bb-stat-header">
+          <div class="bb-stat-icon bb-stat-icon-followup"><i class="ti ti-clock"></i></div>
+          <span class="bb-stat-label">Follow Up</span>
+        </div>
+        <div class="bb-stat-value text-warning" id="stat-followup">—</div>
+        <div class="bb-stat-sub">in progress</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="bb-stat-card bb-stat-card-resolved">
+        <div class="bb-stat-header">
+          <div class="bb-stat-icon bb-stat-icon-resolved"><i class="ti ti-circle-check"></i></div>
+          <span class="bb-stat-label">Resolved</span>
+        </div>
+        <div class="bb-stat-value text-success" id="stat-resolved">—</div>
+        <div class="bb-stat-sub">completed</div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="bb-stat-card bb-stat-card-overdue">
+        <div class="bb-stat-header">
+          <div class="bb-stat-icon bb-stat-icon-overdue"><i class="ti ti-alert-triangle"></i></div>
+          <span class="bb-stat-label">Overdue</span>
+        </div>
+        <div class="bb-stat-value text-danger" id="stat-overdue">—</div>
+        <div class="bb-stat-sub">past SLA</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="card bb-filter-card mb-3">
+    <div class="card-body py-2 px-3">
+      <div class="row g-2 align-items-center">
+        <div class="col-12 col-md-4">
+          <input type="search" id="search-input" class="form-control form-control-sm"
+                 placeholder="Search subject or email…">
+        </div>
+        <div class="col-6 col-md-2">
+          <select id="filter-status" class="form-select form-select-sm">
+            <option value="">All statuses</option>
+            <option value="new">New</option>
+            <option value="follow_up">Follow Up</option>
+            <option value="not_interested">Not Interested</option>
+            <option value="resolved">Resolved</option>
+            <option value="closed">Closed</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-2">
+          <select id="filter-priority" class="form-select form-select-sm">
+            <option value="">All priorities</option>
+            <option value="high">High</option>
+            <option value="normal">Normal</option>
+            <option value="low">Low</option>
+          </select>
+        </div>
+        <div class="col-6 col-md-2 d-flex align-items-center">
+          <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="filter-mine">
+            <label class="form-check-label small" for="filter-mine">My cases</label>
+          </div>
+        </div>
+        <div class="col-6 col-md-2 text-md-end">
+          <span id="case-count" class="small text-muted"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feedback bar -->
+  <div id="feedback" class="alert py-2 px-3 small mb-3 d-none" role="status"></div>
+
+  <!-- Cases table -->
+  <div class="card bb-table-card">
+    <div class="card-body p-0">
+      <div class="table-responsive">
+        <table class="table bb-table mb-0">
+          <thead class="bb-thead">
+            <tr>
+              <th style="width:150px">Case</th>
+              <th style="width:260px;min-width:160px">Subject</th>
+              <th style="width:180px;min-width:140px">From</th>
+              <th style="width:120px">Status</th>
+              <th style="width:80px">Priority</th>
+              <th style="width:130px">Last activity</th>
+              <th style="width:220px">Actions</th>
+            </tr>
+          </thead>
+          <tbody id="cases-tbody">
+            <tr><td colspan="7" class="text-center text-muted py-5">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="js/firebase-config.js"></script>
+<script src="js/channels.js"></script>
+<script>
+const API = window.SUPPORT_API;
+
+firebase.initializeApp(window.FIREBASE_CONFIG);
+const auth = firebase.auth();
+
+let _cases       = [];
+let _channels    = [];
+let _refreshTimer = null;
+
+// Resolved once channels load: which mailbox this page shows, its label,
+// whether it's the main (Support) channel, and the main channel's
+// account/label (the transfer destination for every non-main channel).
+let ACCOUNT       = new URLSearchParams(window.location.search).get("account") || "";
+let BOARD_LABEL   = "Cases";
+let IS_MAIN       = false;
+let MAIN_ACCOUNT  = "";
+let MAIN_LABEL    = "Support";
+let CURRENT_USER_EMAIL = "";
+
+async function getToken() {
+  return auth.currentUser ? auth.currentUser.getIdToken() : null;
+}
+
+async function fetchJSON(path, opts = {}) {
+  const token = await getToken();
+  const res = await fetch(API + path, {
+    ...opts,
+    headers: {
+      "Authorization": `Bearer ${token}`,
+      "Content-Type":  "application/json",
+      ...(opts.headers || {}),
+    },
+  });
+  if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+  return res.json();
+}
+
+function setFeedback(msg, type) {
+  const fb = document.getElementById("feedback");
+  if (!type) { fb.classList.add("d-none"); return; }
+  fb.className = `alert alert-${type} py-2 px-3 small mb-3`;
+  fb.innerHTML = msg;
+  fb.classList.remove("d-none");
+}
+
+function escHtml(s) {
+  return (s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function statusBadge(s) {
+  const map = {
+    new:            ["new",            "New"],
+    follow_up:      ["follow_up",      "Follow Up"],
+    not_interested: ["not_interested", "Not Interested"],
+    resolved:       ["resolved",       "Resolved"],
+    closed:         ["closed",         "Closed"],
+    open:           ["new",            "New"],       // legacy
+    replied:        ["follow_up",      "Follow Up"], // legacy
+  };
+  const [cls, label] = map[s] || ["secondary", s || "—"];
+  return `<span class="badge bb-badge-${cls}">${label}</span>`;
+}
+
+function priorityBadge(p) {
+  const map = { high: "danger", normal: "secondary", low: "info" };
+  return `<span class="badge bb-badge-${map[p] || "secondary"}">${p || "normal"}</span>`;
+}
+
+function relTime(iso) {
+  if (!iso) return "—";
+  const d = Math.floor((Date.now() - new Date(iso)) / 1000);
+  if (d < 60)     return "just now";
+  if (d < 3600)   return `${Math.floor(d / 60)}m ago`;
+  if (d < 86400)  return `${Math.floor(d / 3600)}h ago`;
+  return `${Math.floor(d / 86400)}d ago`;
+}
+
+function isOverdue(c) {
+  if (!c.sla_deadline) return false;
+  const active = ["new", "open", "follow_up"];
+  return active.includes(c.status) && new Date(c.sla_deadline) < new Date();
+}
+
+function isUnread(c) {
+  // Unread = last message was from customer (IN) and case is active
+  const active = ["new", "open", "follow_up"];
+  return active.includes(c.status) && c.last_history_direction === "IN";
+}
+
+function rowStatusClass(s) {
+  const norm = (s === "open" || s === "replied") ? (s === "replied" ? "follow_up" : "new") : s;
+  return `bb-row-${norm}`;
+}
+
+async function transferCase(docId, caseNum) {
+  if (!MAIN_ACCOUNT) return;
+  if (!confirm(`Transfer ${BOARD_LABEL} Case ${caseNum} to ${MAIN_LABEL}? A linked copy (with full history) will be created there; this case stays here too, marked as transferred.`)) return;
+  try {
+    const r = await fetchJSON(`/api/support/cases/${docId}/transfer`, {
+      method: "POST",
+      body: JSON.stringify({ to_account: MAIN_ACCOUNT }),
+    });
+    setFeedback(`<i class="ti ti-check me-1"></i>Transferred to ${MAIN_LABEL} as ${MAIN_LABEL} Case ${r.new_board_no || r.new_case_id}.`, "success");
+    await refresh();
+    setTimeout(() => setFeedback(null), 4000);
+  } catch (e) {
+    setFeedback(`<i class="ti ti-circle-x me-1"></i>${escHtml(e.message)}`, "danger");
+  }
+}
+
+function quickActions(c) {
+  const transferBtn = (!IS_MAIN && MAIN_ACCOUNT)
+    ? `<button class="bb-quick-btn transfer" onclick="transferCase('${c.id}','${c.board_no || c.case_id}')">
+         <i class="ti ti-arrow-right" style="font-size:.7rem"></i> To ${escHtml(MAIN_LABEL)}
+       </button>`
+    : "";
+
+  if (c.transferred_to) {
+    const toLabel = window.BBChannels.labelFor(c.transferred_to.account) || MAIN_LABEL;
+    return `
+      <div class="bb-quick-actions">
+        <span class="bb-quick-btn transferred" title="Moved to the ${escHtml(toLabel)} board">
+          <i class="ti ti-arrow-right" style="font-size:.7rem"></i> Transferred (${escHtml(toLabel)} Case ${c.transferred_to.board_no || c.transferred_to.case_id})
+        </span>
+      </div>`;
+  }
+
+  const inactive = ["not_interested", "resolved", "closed"];
+  if (c.transferred_from) {
+    const reopenBtn = inactive.includes(c.status)
+      ? `<button class="bb-quick-btn reopen" onclick="quickStatus('${c.id}','new')"><i class="ti ti-refresh" style="font-size:.7rem"></i> Re-open</button>`
+      : `<button class="bb-quick-btn reply" onclick="quickReply('${c.id}')"><i class="ti ti-send" style="font-size:.7rem"></i> Reply</button>
+         <button class="bb-quick-btn fu" onclick="quickStatus('${c.id}','follow_up')">Follow Up</button>
+         <button class="bb-quick-btn ni" onclick="quickStatus('${c.id}','not_interested')">Not Interested</button>`;
+    return `<div class="bb-quick-actions">${reopenBtn}</div>`;
+  }
+
+  if (inactive.includes(c.status)) {
+    return `
+      <div class="bb-quick-actions">
+        <button class="bb-quick-btn reopen" onclick="quickStatus('${c.id}','new')">
+          <i class="ti ti-refresh" style="font-size:.7rem"></i> Re-open
+        </button>
+        ${transferBtn}
+      </div>`;
+  }
+  return `
+    <div class="bb-quick-actions">
+      <button class="bb-quick-btn reply" onclick="quickReply('${c.id}')">
+        <i class="ti ti-send" style="font-size:.7rem"></i> Reply
+      </button>
+      <button class="bb-quick-btn fu" onclick="quickStatus('${c.id}','follow_up')">
+        Follow Up
+      </button>
+      <button class="bb-quick-btn ni" onclick="quickStatus('${c.id}','not_interested')">
+        Not Interested
+      </button>
+      ${transferBtn}
+    </div>`;
+}
+
+function renderCases(cases) {
+  const tbody = document.getElementById("cases-tbody");
+  const newCount = cases.filter(c => c.status === "new" || c.status === "open").length;
+  document.title = newCount > 0 ? `(${newCount} new) ${BOARD_LABEL} Cases — Blueboot Support` : `${BOARD_LABEL} Cases — Blueboot Support`;
+  document.getElementById("case-count").textContent =
+    `${cases.length} case${cases.length !== 1 ? "s" : ""}`;
+
+  if (!cases.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-5">No cases found</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = cases.map(c => {
+    const overdue = isOverdue(c);
+    const unread  = isUnread(c);
+    const fromLabel = c.transferred_from ? window.BBChannels.labelFor(c.transferred_from.account) : "";
+    return `
+    <tr class="bb-row ${rowStatusClass(c.status)}" onclick="window.location='case_detail.html?id=${encodeURIComponent(c.id)}'"
+        style="cursor:pointer">
+      <td>
+        <span class="bb-case-id">${BOARD_LABEL} Case ${c.board_no || c.case_id || c.id}</span>
+        ${overdue ? '<span class="bb-overdue-chip">Overdue</span>' : ""}
+        ${c.transferred_from ? `<span class="bb-overdue-chip" style="background:#ede9fe;color:#6d28d9" title="Transferred from ${escHtml(fromLabel)}">From ${escHtml(fromLabel)}</span>` : ""}
+      </td>
+      <td class="bb-subject">
+        ${unread ? '<span class="bb-unread-dot" title="Customer reply waiting"></span>' : ""}${escHtml(c.subject || "(no subject)")}
+      </td>
+      <td style="width:180px;min-width:140px">
+        ${escHtml(c.from_name || c.from_email || "—")}<br>
+        <small class="text-muted">${escHtml(c.from_email || "")}</small>
+      </td>
+      <td>${statusBadge(c.status)}</td>
+      <td>${priorityBadge(c.priority)}</td>
+      <td class="small text-muted">${relTime(c.last_history_at || c.updated_at)}</td>
+      <td onclick="event.stopPropagation()">${quickActions(c)}</td>
+    </tr>`;
+  }).join("");
+}
+
+function applyFilters() {
+  const q    = document.getElementById("search-input").value.trim().toLowerCase();
+  const st   = document.getElementById("filter-status").value;
+  const pr   = document.getElementById("filter-priority").value;
+  const mine = document.getElementById("filter-mine").checked;
+  renderCases(_cases.filter(c =>
+    (!st   || c.status === st || (st === "new" && c.status === "open")) &&
+    (!pr   || (c.priority || "normal") === pr) &&
+    (!mine || c.assigned_to === CURRENT_USER_EMAIL) &&
+    (!q    || (c.subject || "").toLowerCase().includes(q) ||
+               (c.from_email || "").toLowerCase().includes(q))
+  ));
+}
+
+function renderStats(cases) {
+  const now = new Date();
+  const active = ["new", "open", "follow_up"];
+  let s = { new: 0, follow_up: 0, resolved: 0, overdue: 0 };
+  cases.forEach(c => {
+    const st = c.status;
+    if (st === "new" || st === "open") s.new++;
+    else if (st === "follow_up") s.follow_up++;
+    else if (st === "resolved" || st === "closed" || st === "replied") s.resolved++;
+    if (c.sla_deadline && active.includes(st) && new Date(c.sla_deadline) < now) s.overdue++;
+  });
+  document.getElementById("stat-new").textContent      = s.new;
+  document.getElementById("stat-followup").textContent = s.follow_up;
+  document.getElementById("stat-resolved").textContent = s.resolved;
+  document.getElementById("stat-overdue").textContent  = s.overdue;
+}
+
+async function loadCases() {
+  try {
+    const data = await fetchJSON(`/api/support/cases?limit=200&account=${encodeURIComponent(ACCOUNT)}`);
+    _cases = data.cases || [];
+    renderStats(_cases);
+    applyFilters();
+  } catch (e) {
+    document.getElementById("cases-tbody").innerHTML =
+      `<tr><td colspan="7" class="text-center text-danger py-4">${escHtml(e.message)}</td></tr>`;
+  }
+}
+
+async function refresh() {
+  await loadCases();
+}
+
+function startAutoRefresh() {
+  if (_refreshTimer) clearInterval(_refreshTimer);
+  _refreshTimer = setInterval(refresh, 2 * 60 * 1000); // every 2 minutes
+}
+
+async function checkMail() {
+  const btn = document.getElementById("check-btn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Checking…';
+  setFeedback('<i class="ti ti-refresh me-1"></i>Checking mail…', "info");
+  try {
+    const r = await fetchJSON("/api/support/check-mail", { method: "POST" });
+    setFeedback(
+      `<i class="ti ti-check me-1"></i>Done — ${r.new_cases} new case${r.new_cases !== 1 ? "s" : ""}, ` +
+      `${r.appended} message${r.appended !== 1 ? "s" : ""} appended.`,
+      "success"
+    );
+    await refresh();
+  } catch (e) {
+    setFeedback(`<i class="ti ti-circle-x me-1"></i>${escHtml(e.message)}`, "danger");
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="ti ti-refresh me-1"></i>Check mail';
+  }
+}
+
+async function quickStatus(caseId, status) {
+  try {
+    const token = await getToken();
+    await fetch(API + `/api/support/cases/${caseId}`, {
+      method: "PATCH",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    });
+    setFeedback(`<i class="ti ti-check me-1"></i>Status updated to <b>${status.replace(/_/g," ")}</b>`, "success");
+    await refresh();
+    setTimeout(() => setFeedback(null), 2500);
+  } catch (e) {
+    setFeedback(`<i class="ti ti-circle-x me-1"></i>${escHtml(e.message)}`, "danger");
+  }
+}
+
+function quickReply(caseId) {
+  window.location.href = `case_detail.html?id=${encodeURIComponent(caseId)}&reply=1`;
+}
+
+// ── Cross-channel search (point 6) ────────────────────────────────────────────
+
+let _searchDebounce = null;
+
+function hideGlobalSearchResults() {
+  const el = document.getElementById("global-search-results");
+  el.classList.add("d-none");
+  el.innerHTML = "";
+}
+
+async function runGlobalSearch(q) {
+  const resultsEl = document.getElementById("global-search-results");
+  if (!q) { hideGlobalSearchResults(); return; }
+  try {
+    const data  = await fetchJSON(`/api/support/cases?q=${encodeURIComponent(q)}&limit=20`);
+    const cases = data.cases || [];
+    if (!cases.length) {
+      resultsEl.innerHTML = `<div class="bb-global-search-empty">No matches</div>`;
+    } else {
+      resultsEl.innerHTML = cases.map(c => {
+        const label = window.BBChannels.labelFor(c.mail_account);
+        return `<a href="case_detail.html?id=${encodeURIComponent(c.id)}" class="bb-global-search-item">
+          <span class="bb-global-search-channel">${escHtml(label)}</span>
+          <span class="bb-global-search-subject">${escHtml(c.subject || "(no subject)")}</span>
+          <span class="bb-global-search-from text-muted">${escHtml(c.from_email || "")}</span>
+        </a>`;
+      }).join("");
+    }
+    resultsEl.classList.remove("d-none");
+  } catch (e) {
+    resultsEl.innerHTML = `<div class="bb-global-search-empty text-danger">${escHtml(e.message)}</div>`;
+    resultsEl.classList.remove("d-none");
+  }
+}
+
+// ── Admin-only "Channels" link (point 4) ──────────────────────────────────────
+
+async function checkAdminLink() {
+  try {
+    const me = await fetchJSON("/api/support/me");
+    if (me.role === "admin") {
+      document.getElementById("channels-admin-link").classList.remove("d-none");
+    }
+  } catch (e) {
+    // Non-fatal — admin link just stays hidden.
+  }
+}
+
+async function initChannel() {
+  _channels = await window.BBChannels.fetchChannels(fetchJSON);
+  const main = window.BBChannels.mainChannel(_channels);
+  MAIN_ACCOUNT = main ? main.account : "";
+  MAIN_LABEL   = main ? main.label   : "Support";
+
+  if (!ACCOUNT && main) {
+    ACCOUNT = main.account;
+  }
+  // Keep the URL shareable/bookmarkable without forcing a reload.
+  if (ACCOUNT) {
+    const url = new URL(window.location.href);
+    url.searchParams.set("account", ACCOUNT);
+    history.replaceState(null, "", url);
+  }
+
+  const current = _channels.find(c => c.account === ACCOUNT);
+  BOARD_LABEL = current ? current.label : (ACCOUNT.split("@")[0] || "Cases");
+  IS_MAIN     = current ? current.is_main : false;
+
+  document.getElementById("brand-label").textContent = BOARD_LABEL;
+  window.BBChannels.render("channel-nav", _channels, ACCOUNT);
+}
+
+auth.onAuthStateChanged(async user => {
+  if (!user) { window.location.href = "login.html"; return; }
+  CURRENT_USER_EMAIL = user.email || "";
+  document.getElementById("user-email").textContent = user.email;
+  try {
+    await initChannel();
+  } catch (e) {
+    setFeedback(`<i class="ti ti-circle-x me-1"></i>Could not load channels: ${escHtml(e.message)}`, "danger");
+  }
+  checkAdminLink();
+  await refresh();
+  startAutoRefresh();
+});
+
+document.getElementById("logout-btn").onclick  = () => auth.signOut().then(() => { window.location.href = "login.html"; });
+document.getElementById("check-btn").onclick   = checkMail;
+document.getElementById("search-input").addEventListener("input",  applyFilters);
+document.getElementById("filter-status").addEventListener("change", applyFilters);
+document.getElementById("filter-priority").addEventListener("change", applyFilters);
+document.getElementById("filter-mine").addEventListener("change", applyFilters);
+
+const _globalSearchInput = document.getElementById("global-search-input");
+_globalSearchInput.addEventListener("input", () => {
+  clearTimeout(_searchDebounce);
+  const q = _globalSearchInput.value.trim();
+  _searchDebounce = setTimeout(() => runGlobalSearch(q), 300);
+});
+_globalSearchInput.addEventListener("focus", () => {
+  if (_globalSearchInput.value.trim()) runGlobalSearch(_globalSearchInput.value.trim());
+});
+document.addEventListener("click", (e) => {
+  if (!e.target.closest(".bb-global-search")) hideGlobalSearchResults();
+});
+</script>
+</body>
+</html>

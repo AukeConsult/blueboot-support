@@ -144,7 +144,7 @@ def cmd_case(args):
         return
 
     from support_mail.mail_checker import _board_label
-    label = f"{_board_label(case.get('mail_account',''))} Case {case.get('board_no', case.get('case_id'))}"
+    label = f"{_board_label(case.get('mail_account',''), db)} Case {case.get('board_no', case.get('case_id'))}"
 
     print(f"\n{'─'*60}")
     print(f"  {label}  (case_id={case.get('case_id')})  [{case.get('status','?').upper()}]  priority={case.get('priority','normal')}")
@@ -228,7 +228,7 @@ def cmd_board_no(args):
     from support_mail.mail_checker import _next_board_no, _board_label
     account = args.board_no.strip().lower()
     times   = max(1, int(args.times or 1))
-    label   = _board_label(account)
+    label   = _board_label(account, db)
     print(f"\nIncrementing board counter for {account} ({label}) x{times}:")
     for _ in range(times):
         n = _next_board_no(db, account)
@@ -259,7 +259,7 @@ def cmd_transfer(args):
               f"{case['transferred_to'].get('case_id')}.\n")
         return
 
-    old_label = f"{_board_label(case.get('mail_account'))} Case {case.get('board_no', case_id)}"
+    old_label = f"{_board_label(case.get('mail_account'), db)} Case {case.get('board_no', case_id)}"
     print(f"\nTransfer {old_label} ({case.get('mail_account')}) -> {to_account}")
     print(f"  Subject : {case.get('subject','')}")
 
@@ -301,7 +301,7 @@ def cmd_transfer(args):
     for h in ref.collection("history").order_by("timestamp").stream():
         new_ref.collection("history").document(h.id).set(h.to_dict())
 
-    new_label = f"{_board_label(to_account)} Case {new_board_no}"
+    new_label = f"{_board_label(to_account, db)} Case {new_board_no}"
     ref.collection("actions").document().set({
         "type": "transferred_to", "by": "cli", "at": now,
         "from_value": None, "to_value": None, "note": f"Transferred to {new_label}",
@@ -334,7 +334,7 @@ def cmd_reply(args):
     body         = args.message
     mail_account = case.get("mail_account","")
     to_email     = case.get("from_email","")
-    case_label   = f"{_board_label(mail_account)} Case {case.get('board_no', case_id)}"
+    case_label   = f"{_board_label(mail_account, db)} Case {case.get('board_no', case_id)}"
     subject      = f"RE: {case_label}: {case.get('subject','')}"
 
     print(f"\nReply to  : {to_email}")

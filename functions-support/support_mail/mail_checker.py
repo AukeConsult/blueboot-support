@@ -328,12 +328,49 @@ _BOARD_LABELS = {
 }
 
 
-def _board_label(account_email: str) -> str:
-    """Human-friendly board name for a mailbox (falls back to its local-part)."""
+def _account_doc(db, account_email: str) -> dict:
+    """Fetch the settings/mail_accounts/accounts/{email} doc, never raises."""
     key = (account_email or "").strip().lower()
+    if not key:
+        return {}
+    try:
+        snap = (db.collection("settings").document("mail_accounts")
+                  .collection("accounts").document(key).get())
+        if snap.exists:
+            return snap.to_dict() or {}
+    except Exception:
+        pass
+    return {}
+
+
+def _board_label(account_email: str, db=None) -> str:
+    """Human-friendly channel/board name for a mailbox.
+
+    Resolution order: Firestore `label` field on the mail account doc (lets any
+    channel be renamed/added without code changes) → legacy `_BOARD_LABELS`
+    dict → capitalized local-part of the address.
+    """
+    key = (account_email or "").strip().lower()
+    if db is not None:
+        label = (_account_doc(db, key).get("label") or "").strip()
+        if label:
+            return label
     if key in _BOARD_LABELS:
         return _BOARD_LABELS[key]
     return (key.split("@")[0] or "Case").capitalize()
+
+
+def _is_main_channel(account_email: str, db=None) -> bool:
+    """True for the central/main channel (Support) that every other channel
+    can transfer cases into. Configurable via Firestore `is_main` field on
+    the mail account doc; falls back to the well-known support@ address.
+    """
+    key = (account_email or "").strip().lower()
+    if db is not None:
+        doc = _account_doc(db, key)
+        if "is_main" in doc:
+            return bool(doc["is_main"])
+    return key == "support@blueboot.ai"
 
 
 def _next_board_no(db, account_email: str) -> int:
@@ -607,7 +644,7 @@ def run_mail_check(db, account_email: str | None = None, days: int = 7, dry_run:
                     # Send auto-acknowledgement to client
                     try:
                         from support_mail.reply_sender import send_ack_email
-                        case_label = f"{_board_label(acc_email)} Case {board_no}"
+                        case_label = f"{_board_label(acc_email, db)} Case {board_no}"
                         send_ack_email(db, acc_email, from_addr, from_name,
                                        case_id_int, subject, case_label=case_label)
                         print(f"[support-mail]   ack sent to {from_addr} ({case_label})", flush=True)
