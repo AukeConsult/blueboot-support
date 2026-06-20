@@ -42,6 +42,11 @@
             <i class="ti ti-inbox me-1" aria-hidden="true"></i><span id="case-account">—</span>
             &nbsp;·&nbsp;SLA:&nbsp;<span id="case-sla" class="fw-medium">—</span>
           </p>
+          <div class="d-flex align-items-center flex-wrap gap-1 mt-2">
+            <span id="case-tags"></span>
+            <input type="text" id="tag-input" class="form-control form-control-sm bb-tag-input"
+                   placeholder="+ tag" title="Type a tag and press Enter">
+          </div>
         </div>
         <div class="d-flex gap-2 align-items-center flex-wrap">
           <select id="priority-select" class="form-select form-select-sm bb-status-select" title="Priority">
@@ -56,6 +61,12 @@
             <option value="resolved">Resolved</option>
             <option value="closed">Closed</option>
           </select>
+          <select id="assign-select" class="form-select form-select-sm bb-assign-select" title="Assigned to">
+            <option value="">Unassigned</option>
+          </select>
+          <button id="assign-me-btn" class="btn btn-sm bb-btn-outline" title="Assign to me">
+            <i class="ti ti-user-circle me-1" aria-hidden="true"></i>Mine
+          </button>
           <button id="save-meta-btn" class="btn btn-sm bb-btn-outline">Save</button>
           <button id="transfer-btn" class="btn btn-sm bb-btn-outline d-none">
             <i class="ti ti-arrow-right me-1" aria-hidden="true"></i>Transfer to Support
@@ -136,6 +147,9 @@ let _channels    = [];
 let BOARD_LABEL  = "Case";
 let MAIN_ACCOUNT = "";
 let MAIN_LABEL   = "Support";
+let _teamMembers = [];
+let CURRENT_USER_EMAIL = "";
+let _caseTags = [];
 
 firebase.initializeApp(window.FIREBASE_CONFIG);
 const auth = firebase.auth();
@@ -280,6 +294,55 @@ function renderAction(a) {
     </div>`;
 }
 
+// ── Team members (assignment dropdown) ───────────────────────────────────────
+async function loadTeamMembers() {
+  try {
+    const data = await fetchJSON("/api/support/users");
+    _teamMembers = data.users || [];
+  } catch (e) {
+    _teamMembers = []; // non-fatal — assign dropdown just stays empty
+  }
+}
+
+function renderAssignOptions(selectedEmail) {
+  const sel  = document.getElementById("assign-select");
+  const opts = [`<option value="">Unassigned</option>`]
+    .concat(_teamMembers.map(u => `<option value="${escHtml(u.email)}">${escHtml(u.email)}</option>`));
+  sel.innerHTML = opts.join("");
+  sel.value = selectedEmail || "";
+}
+
+// ── Tags ──────────────────────────────────────────────────────────────────
+function renderTags() {
+  document.getElementById("case-tags").innerHTML = _caseTags.map(t => `
+    <span class="bb-tag-chip">${escHtml(t)}<i class="ti ti-x" onclick="removeTag('${escHtml(t)}')"></i></span>
+  `).join("");
+}
+
+async function saveTags() {
+  try {
+    await fetchJSON(`/api/support/cases/${caseId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ tags: _caseTags }),
+    });
+    renderTags();
+  } catch (e) {
+    setFeedback(`<i class="ti ti-circle-x me-1"></i>${escHtml(e.message)}`, "danger");
+  }
+}
+
+function addTag(raw) {
+  const tag = (raw || "").trim().toLowerCase();
+  if (!tag || _caseTags.includes(tag)) return;
+  _caseTags = [..._caseTags, tag];
+  saveTags();
+}
+
+function removeTag(tag) {
+  _caseTags = _caseTags.filter(t => t !== tag);
+  saveTags();
+}
+
 // ── Load case ────────────────────────────────────────────────────────────────
 async function loadCase() {
   try {
@@ -297,6 +360,9 @@ async function loadCase() {
     document.getElementById("case-sla").innerHTML       = slaStatus(data.sla_deadline);
     document.getElementById("status-select").value      = data.status || "open";
     document.getElementById("priority-select").value    = data.priority || "normal";
+    renderAssignOptions(data.assigned_to);
+    _caseTags = data.tags || [];
+    renderTags();
     renderTimeline(data.timeline || []);
 
     // Keep "All cases" pointed at this case's own channel, and highlight that
@@ -332,8 +398,9 @@ async function saveMeta() {
     await fetchJSON(`/api/support/cases/${caseId}`, {
       method: "PATCH",
       body: JSON.stringify({
-        status:   document.getElementById("status-select").value,
-        priority: document.getElementById("priority-select").value,
+        status:      document.getElementById("status-select").value,
+        priority:    document.getElementById("priority-select").value,
+        assigned_to: document.getElementById("assign-select").value || null,
       }),
     });
     setFeedback('<i class="ti ti-check me-1"></i>Saved', "success");
@@ -415,6 +482,7 @@ async function transferCase() {
 
 auth.onAuthStateChanged(async user => {
   if (!user) { window.location.href = "login.html"; return; }
+  CURRENT_USER_EMAIL = user.email || "";
   document.getElementById("user-email").textContent = user.email;
   try {
     _channels = await window.BBChannels.fetchChannels(fetchJSON);
@@ -424,6 +492,7 @@ auth.onAuthStateChanged(async user => {
   } catch (e) {
     setFeedback(`<i class="ti ti-circle-x me-1"></i>Could not load channels: ${escHtml(e.message)}`, "danger");
   }
+  await loadTeamMembers();
   await loadCase();
   // Auto-open reply tab if redirected from board quick reply button
   if (new URLSearchParams(location.search).get("reply") === "1") {
@@ -438,6 +507,16 @@ document.getElementById("send-btn").onclick      = sendReply;
 document.getElementById("note-btn").onclick      = addNote;
 document.getElementById("save-meta-btn").onclick = saveMeta;
 document.getElementById("transfer-btn").onclick  = transferCase;
+document.getElementById("assign-me-btn").onclick = () => {
+  document.getElementById("assign-select").value = CURRENT_USER_EMAIL;
+};
+document.getElementById("tag-input").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    addTag(e.target.value);
+    e.target.value = "";
+  }
+});
 </script>
 </body>
 </html>

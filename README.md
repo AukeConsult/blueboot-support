@@ -30,18 +30,23 @@ Agent replies manually from the board
 
 **API endpoints:**
 ```
-GET  /api/support/cases              list all cases (?account=, ?status=, ?priority=, ?q=, ?limit=)
+GET  /api/support/cases              list cases (?account=, ?status=, ?priority=, ?tags=, ?q=, ?limit=, ?cursor=)
+GET  /api/support/cases/export       same filters as above, returns a CSV file
 GET  /api/support/cases/{id}         case + unified timeline
-PATCH /api/support/cases/{id}        update status / priority / assigned_to
+PATCH /api/support/cases/{id}        update status / priority / assigned_to / tags
+POST /api/support/cases/bulk-update  apply one status/priority/assigned_to change to many case_ids at once
 POST /api/support/cases/{id}/reply   send manual reply
 POST /api/support/cases/{id}/note    add internal note
 POST /api/support/cases/{id}/transfer   move a case to another channel (linked copy)
+GET  /api/support/saved-filters      signed-in user's saved filter combinations
+PUT  /api/support/saved-filters      replace the signed-in user's saved filter list
 GET  /api/support/channels           list every configured channel (account, label, is_main, unread/overdue counts)
 GET  /api/support/channels/{account} full channel config, password excluded — admin only
 POST /api/support/channels           create a new channel/mailbox — admin only
 PATCH /api/support/channels/{account} update a channel's settings/credentials — admin only
 DELETE /api/support/channels/{account} remove a channel (refuses to delete the main channel) — admin only
 GET  /api/support/me                 current signed-in user's email + role
+GET  /api/support/users              list teammates (email + role) for assignment dropdowns
 GET  /api/support/stats              dashboard counts
 POST /api/support/check-mail         trigger mail check + SLA scan
 POST /api/support/check-sla          trigger SLA scan only (manual)
@@ -49,6 +54,37 @@ POST /api/support/check-sla          trigger SLA scan only (manual)
 
 `GET /api/support/cases` with no `?account=` searches every channel at once — this
 powers the cross-channel search box in the board navbar.
+
+**Pagination** — `GET /api/support/cases` is cursor-based: each response includes
+`next_cursor` (a string, or `null` on the last page); pass it back as `?cursor=`
+to fetch the following page. The board's Prev/Next buttons use this; the "My
+cases" filter falls back to a single larger unfiltered fetch (no backend
+`assigned_to` query param exists) and paginates client-side instead, so the
+pager is disabled while that filter is on.
+
+**CSV export** — `GET /api/support/cases/export` takes the same filters as the
+list endpoint (no pagination) and returns `text/csv`. Since it requires the
+same Bearer auth as every other endpoint, the board downloads it via
+`fetch()` + `Blob` rather than a plain link.
+
+**Bulk actions** — select one or more rows on the board (checkboxes in the
+table, "select all" in the header) to reveal a toolbar for setting status,
+priority, or assignee on every selected case in one call to
+`POST /api/support/cases/bulk-update` (`{"case_ids": [...], "update": {...}}`).
+Each case is updated independently server-side; the response reports
+`succeeded`/`failed` counts so a partial failure doesn't look like total success.
+
+**Tags** — any case can carry a free-form list of `tags` (set via the same
+`PATCH /api/support/cases/{id}` used for status/priority, with `tags` as the
+list of strings). The board's filter bar has a tag text box (`?tags=` does an
+`array_contains` match); the case detail page lets you add/remove tags
+directly on the case header as small pill chips.
+
+**Saved filters** — each signed-in user can save a named combination of
+status/priority/tags/"my cases" for one-click reuse from a dropdown on the
+board ("Save current filter" / pick from the list / delete). Stored per-user
+on their own `settings/users/users/{email}` document — no admin role needed,
+since it's the user's own preference, not shared configuration.
 
 ---
 
@@ -118,6 +154,15 @@ channel it belongs to.
 
 **"My cases" filter** — a toggle on the board filters the visible list down to
 cases whose `assigned_to` matches the signed-in user's email.
+
+**Assigning a case** — every active case row on the board has an **Assign to
+me** button plus a small dropdown to hand it to a teammate instead; the same
+two controls appear in the header of `case_detail.html`. Both call the
+existing `PATCH /api/support/cases/{id}` with `assigned_to`, which already
+logged this to the case's action history — the controls were the only piece
+missing. The teammate list comes from `GET /api/support/users`, which reads
+`settings/users/users/{email}` and returns everyone with a `user`,
+`campaign-user`, or `admin` role.
 
 **Adding a new channel** — no code or HTML changes needed:
 1. Add the mailbox to `settings/mail_accounts/accounts/{email}` in Firestore
@@ -206,6 +251,8 @@ blueboot-support/
       cases.py                    ← case CRUD, reply, note, stats
       mail_check.py               ← /check-mail endpoint
       sla_check.py                ← /check-sla endpoint + _run_sla_check()
+      users.py                    ← /users endpoint — teammate list for assignment dropdowns
+      saved_filters.py            ← /saved-filters GET/PUT — per-user saved board filters
     support_mail/
       mail_checker.py             ← IMAP reader + case creator
       reply_sender.py             ← SMTP sender (ack, reply, SLA warning)
@@ -355,7 +402,11 @@ support_mail_accounts/{account}/cases/{case_id}/
   transferred_from: { case_id, board_no, account }    ← set on the new copy
 
   history/{auto_id}/    ← EMAIL_IN | EMAIL_OUT | NOTE
-  actions/{auto_id}/    ← created | status_changed | replied | email_received | transferred_to | transferred_from
+  actions/{auto_id}/    ← created | status_changed | replied | email_received | transferred_to | transferred_from | tags_updated
 
 support_email_index/{message_id}/   ← dedup — prevents double-processing
+
+settings/users/users/{email}/
+  role                  ← user | campaign-user | admin
+  saved_filters: [ { name, status, priority, account, tags, mine }, ... ]   ← max 25, per user
 ```

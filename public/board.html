@@ -125,11 +125,66 @@
           <span id="case-count" class="small text-muted"></span>
         </div>
       </div>
+      <div class="row g-2 align-items-center mt-1 pt-2 bb-filter-row2">
+        <div class="col-6 col-md-2">
+          <input type="text" id="filter-tags" class="form-control form-control-sm" placeholder="Tag…">
+        </div>
+        <div class="col-6 col-md-4 d-flex gap-1">
+          <select id="saved-filter-select" class="form-select form-select-sm">
+            <option value="">Saved filters…</option>
+          </select>
+          <button id="save-filter-btn" class="btn btn-sm bb-btn-outline" title="Save current filter">
+            <i class="ti ti-bookmark-plus"></i>
+          </button>
+          <button id="delete-filter-btn" class="btn btn-sm bb-btn-outline" title="Delete selected saved filter">
+            <i class="ti ti-trash"></i>
+          </button>
+        </div>
+        <div class="col-12 col-md-6 d-flex justify-content-md-end gap-2">
+          <button id="export-btn" class="btn btn-sm bb-btn-outline">
+            <i class="ti ti-download me-1"></i>Export CSV
+          </button>
+          <div class="bb-pager">
+            <button id="prev-page-btn" class="btn btn-sm bb-btn-outline" disabled title="Previous page">
+              <i class="ti ti-chevron-left"></i>
+            </button>
+            <button id="next-page-btn" class="btn btn-sm bb-btn-outline" disabled title="Next page">
+              <i class="ti ti-chevron-right"></i>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
   <!-- Feedback bar -->
   <div id="feedback" class="alert py-2 px-3 small mb-3 d-none" role="status"></div>
+
+  <!-- Bulk action toolbar (shown when 1+ rows selected) -->
+  <div id="bulk-toolbar" class="card bb-bulk-toolbar mb-3 d-none">
+    <div class="card-body py-2 px-3 d-flex align-items-center gap-2 flex-wrap">
+      <span class="small fw-semibold" id="bulk-count">0 selected</span>
+      <select id="bulk-status" class="form-select form-select-sm" style="max-width:150px">
+        <option value="">Set status…</option>
+        <option value="new">New</option>
+        <option value="follow_up">Follow Up</option>
+        <option value="not_interested">Not Interested</option>
+        <option value="resolved">Resolved</option>
+        <option value="closed">Closed</option>
+      </select>
+      <select id="bulk-priority" class="form-select form-select-sm" style="max-width:130px">
+        <option value="">Set priority…</option>
+        <option value="high">High</option>
+        <option value="normal">Normal</option>
+        <option value="low">Low</option>
+      </select>
+      <select id="bulk-assignee" class="form-select form-select-sm" style="max-width:170px">
+        <option value="">Assign to…</option>
+      </select>
+      <button id="bulk-apply-btn" class="btn btn-sm bb-btn-primary">Apply</button>
+      <button id="bulk-clear-btn" class="btn btn-sm btn-link text-muted">Clear</button>
+    </div>
+  </div>
 
   <!-- Cases table -->
   <div class="card bb-table-card">
@@ -138,17 +193,18 @@
         <table class="table bb-table mb-0">
           <thead class="bb-thead">
             <tr>
+              <th style="width:34px"><input type="checkbox" class="form-check-input" id="select-all-checkbox" title="Select all on this page"></th>
               <th style="width:150px">Case</th>
               <th style="width:260px;min-width:160px">Subject</th>
               <th style="width:180px;min-width:140px">From</th>
               <th style="width:120px">Status</th>
               <th style="width:80px">Priority</th>
               <th style="width:130px">Last activity</th>
-              <th style="width:220px">Actions</th>
+              <th style="width:280px">Actions</th>
             </tr>
           </thead>
           <tbody id="cases-tbody">
-            <tr><td colspan="7" class="text-center text-muted py-5">Loading…</td></tr>
+            <tr><td colspan="8" class="text-center text-muted py-5">Loading…</td></tr>
           </tbody>
         </table>
       </div>
@@ -169,6 +225,12 @@ const auth = firebase.auth();
 let _cases       = [];
 let _channels    = [];
 let _refreshTimer = null;
+let _selected     = new Set();   // case ids selected for bulk action, current page only
+let _savedFilters = [];
+let _cursorStack  = [];          // stack of previous-page cursors, for Prev
+let _currentCursor = null;       // cursor of the page currently shown (null = first page)
+let _nextCursor   = null;        // cursor for the next page, or null if this is the last page
+const _PAGE_LIMIT = 100;
 
 // Resolved once channels load: which mailbox this page shows, its label,
 // whether it's the main (Support) channel, and the main channel's
@@ -179,6 +241,7 @@ let IS_MAIN       = false;
 let MAIN_ACCOUNT  = "";
 let MAIN_LABEL    = "Support";
 let CURRENT_USER_EMAIL = "";
+let _teamMembers  = [];
 
 async function getToken() {
   return auth.currentUser ? auth.currentUser.getIdToken() : null;
@@ -295,7 +358,7 @@ function quickActions(c) {
       : `<button class="bb-quick-btn reply" onclick="quickReply('${c.id}')"><i class="ti ti-send" style="font-size:.7rem"></i> Reply</button>
          <button class="bb-quick-btn fu" onclick="quickStatus('${c.id}','follow_up')">Follow Up</button>
          <button class="bb-quick-btn ni" onclick="quickStatus('${c.id}','not_interested')">Not Interested</button>`;
-    return `<div class="bb-quick-actions">${reopenBtn}</div>`;
+    return `<div class="bb-quick-actions">${reopenBtn}${assignControl(c)}</div>`;
   }
 
   if (inactive.includes(c.status)) {
@@ -305,6 +368,7 @@ function quickActions(c) {
           <i class="ti ti-refresh" style="font-size:.7rem"></i> Re-open
         </button>
         ${transferBtn}
+        ${assignControl(c)}
       </div>`;
   }
   return `
@@ -319,6 +383,7 @@ function quickActions(c) {
         Not Interested
       </button>
       ${transferBtn}
+      ${assignControl(c)}
     </div>`;
 }
 
@@ -330,7 +395,7 @@ function renderCases(cases) {
     `${cases.length} case${cases.length !== 1 ? "s" : ""}`;
 
   if (!cases.length) {
-    tbody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-5">No cases found</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-5">No cases found</td></tr>`;
     return;
   }
 
@@ -341,10 +406,16 @@ function renderCases(cases) {
     return `
     <tr class="bb-row ${rowStatusClass(c.status)}" onclick="window.location='case_detail.html?id=${encodeURIComponent(c.id)}'"
         style="cursor:pointer">
+      <td onclick="event.stopPropagation()">
+        <input type="checkbox" class="bb-row-select form-check-input" data-id="${c.id}"
+               ${_selected.has(c.id) ? "checked" : ""}
+               onchange="toggleRowSelect('${c.id}', this.checked)">
+      </td>
       <td>
         <span class="bb-case-id">${BOARD_LABEL} Case ${c.board_no || c.case_id || c.id}</span>
         ${overdue ? '<span class="bb-overdue-chip">Overdue</span>' : ""}
         ${c.transferred_from ? `<span class="bb-overdue-chip" style="background:#ede9fe;color:#6d28d9" title="Transferred from ${escHtml(fromLabel)}">From ${escHtml(fromLabel)}</span>` : ""}
+        ${c.assigned_to ? `<span class="bb-overdue-chip bb-assigned-chip" title="Assigned to ${escHtml(c.assigned_to)}">${escHtml(c.assigned_to.split("@")[0])}</span>` : ""}
       </td>
       <td class="bb-subject">
         ${unread ? '<span class="bb-unread-dot" title="Customer reply waiting"></span>' : ""}${escHtml(c.subject || "(no subject)")}
@@ -361,18 +432,26 @@ function renderCases(cases) {
   }).join("");
 }
 
+// Filter changes always restart at page 1 — a cursor from the old filter
+// set wouldn't make sense against a newly-filtered query.
 function applyFilters() {
-  const q    = document.getElementById("search-input").value.trim().toLowerCase();
-  const st   = document.getElementById("filter-status").value;
-  const pr   = document.getElementById("filter-priority").value;
-  const mine = document.getElementById("filter-mine").checked;
-  renderCases(_cases.filter(c =>
-    (!st   || c.status === st || (st === "new" && c.status === "open")) &&
-    (!pr   || (c.priority || "normal") === pr) &&
-    (!mine || c.assigned_to === CURRENT_USER_EMAIL) &&
-    (!q    || (c.subject || "").toLowerCase().includes(q) ||
-               (c.from_email || "").toLowerCase().includes(q))
-  ));
+  _cursorStack   = [];
+  _currentCursor = null;
+  loadTablePage(null);
+}
+
+function buildFilterParams() {
+  const params = new URLSearchParams();
+  if (ACCOUNT) params.set("account", ACCOUNT);
+  const st = document.getElementById("filter-status").value;
+  const pr = document.getElementById("filter-priority").value;
+  const tg = document.getElementById("filter-tags").value.trim();
+  const q  = document.getElementById("search-input").value.trim();
+  if (st) params.set("status", st);
+  if (pr) params.set("priority", pr);
+  if (tg) params.set("tags", tg);
+  if (q)  params.set("q", q);
+  return params;
 }
 
 function renderStats(cases) {
@@ -392,32 +471,263 @@ function renderStats(cases) {
   document.getElementById("stat-overdue").textContent  = s.overdue;
 }
 
-async function loadCases() {
+// Stats cards always reflect the whole channel regardless of the table's
+// current filter/page — fetched separately from the (filtered, paginated)
+// table data so changing a filter never makes the dashboard counts lie.
+async function loadStats() {
   try {
     const data = await fetchJSON(`/api/support/cases?limit=200&account=${encodeURIComponent(ACCOUNT)}`);
-    _cases = data.cases || [];
-    renderStats(_cases);
-    applyFilters();
+    renderStats(data.cases || []);
+  } catch (e) {
+    // Non-fatal — stat cards just keep their last known values.
+  }
+}
+
+// "My cases" has no backend filter (assigned_to isn't indexed for it), so
+// when it's on we fetch one larger unpaginated batch and filter client side;
+// the Prev/Next pager is disabled in that mode. Otherwise every filter is
+// applied server-side and paged via cursor.
+async function loadTablePage(cursor) {
+  try {
+    const params = buildFilterParams();
+    const mine = document.getElementById("filter-mine").checked;
+    if (mine) {
+      params.set("limit", "200");
+      const data = await fetchJSON(`/api/support/cases?${params.toString()}`);
+      _cases = (data.cases || []).filter(c => c.assigned_to === CURRENT_USER_EMAIL);
+      _nextCursor = null;
+    } else {
+      params.set("limit", String(_PAGE_LIMIT));
+      if (cursor) params.set("cursor", cursor);
+      const data = await fetchJSON(`/api/support/cases?${params.toString()}`);
+      _cases = data.cases || [];
+      _nextCursor = data.next_cursor || null;
+    }
+    _selected.clear();
+    renderCases(_cases);
+    updateBulkToolbar();
+    updatePagerButtons();
   } catch (e) {
     document.getElementById("cases-tbody").innerHTML =
-      `<tr><td colspan="7" class="text-center text-danger py-4">${escHtml(e.message)}</td></tr>`;
+      `<tr><td colspan="8" class="text-center text-danger py-4">${escHtml(e.message)}</td></tr>`;
+  }
+}
+
+function updatePagerButtons() {
+  document.getElementById("prev-page-btn").disabled = _cursorStack.length === 0;
+  document.getElementById("next-page-btn").disabled = !_nextCursor;
+}
+
+async function goNextPage() {
+  if (!_nextCursor) return;
+  _cursorStack.push(_currentCursor);
+  _currentCursor = _nextCursor;
+  await loadTablePage(_currentCursor);
+}
+
+async function goPrevPage() {
+  if (!_cursorStack.length) return;
+  _currentCursor = _cursorStack.pop();
+  await loadTablePage(_currentCursor);
+}
+
+async function exportCsv() {
+  const btn = document.getElementById("export-btn");
+  btn.disabled = true;
+  const original = btn.innerHTML;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Exporting…';
+  try {
+    const params = buildFilterParams();
+    const token  = await getToken();
+    const res = await fetch(`${API}/api/support/cases/export?${params.toString()}`, {
+      headers: { "Authorization": `Bearer ${token}` },
+    });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url;
+    a.download = "support_cases_export.csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    setFeedback(`<i class="ti ti-circle-x me-1"></i>${escHtml(e.message)}`, "danger");
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = original;
+  }
+}
+
+// ── Bulk selection + bulk actions ───────────────────────────────────────────
+
+function toggleRowSelect(id, checked) {
+  if (checked) _selected.add(id); else _selected.delete(id);
+  updateBulkToolbar();
+  syncSelectAllCheckbox();
+}
+
+function toggleSelectAll(checked) {
+  document.querySelectorAll(".bb-row-select").forEach(cb => {
+    cb.checked = checked;
+    if (checked) _selected.add(cb.dataset.id); else _selected.delete(cb.dataset.id);
+  });
+  updateBulkToolbar();
+}
+
+function syncSelectAllCheckbox() {
+  const all = document.querySelectorAll(".bb-row-select");
+  document.getElementById("select-all-checkbox").checked =
+    all.length > 0 && Array.from(all).every(cb => cb.checked);
+}
+
+function clearSelection() {
+  _selected.clear();
+  document.querySelectorAll(".bb-row-select").forEach(cb => cb.checked = false);
+  document.getElementById("select-all-checkbox").checked = false;
+  updateBulkToolbar();
+}
+
+function updateBulkToolbar() {
+  const toolbar = document.getElementById("bulk-toolbar");
+  const count = _selected.size;
+  document.getElementById("bulk-count").textContent = `${count} selected`;
+  toolbar.classList.toggle("d-none", count === 0);
+}
+
+function renderBulkAssigneeOptions() {
+  const sel = document.getElementById("bulk-assignee");
+  sel.innerHTML = `<option value="">Assign to…</option>` +
+    _teamMembers.map(u => `<option value="${escHtml(u.email)}">${escHtml(u.email)}</option>`).join("");
+}
+
+async function applyBulkAction() {
+  const ids = Array.from(_selected);
+  if (!ids.length) return;
+  const update = {};
+  const st  = document.getElementById("bulk-status").value;
+  const pr  = document.getElementById("bulk-priority").value;
+  const asg = document.getElementById("bulk-assignee").value;
+  if (st)  update.status = st;
+  if (pr)  update.priority = pr;
+  if (asg) update.assigned_to = asg;
+  if (!Object.keys(update).length) {
+    setFeedback(`<i class="ti ti-alert-triangle me-1"></i>Choose at least one change to apply.`, "danger");
+    return;
+  }
+
+  const btn = document.getElementById("bulk-apply-btn");
+  btn.disabled = true;
+  try {
+    const r = await fetchJSON("/api/support/cases/bulk-update", {
+      method: "POST",
+      body: JSON.stringify({ case_ids: ids, update }),
+    });
+    setFeedback(
+      `<i class="ti ti-check me-1"></i>Updated ${r.succeeded} case${r.succeeded !== 1 ? "s" : ""}` +
+      (r.failed ? `, ${r.failed} failed` : "") + ".",
+      r.failed ? "warning" : "success"
+    );
+    document.getElementById("bulk-status").value   = "";
+    document.getElementById("bulk-priority").value = "";
+    document.getElementById("bulk-assignee").value = "";
+    clearSelection();
+    await Promise.all([loadStats(), loadTablePage(_currentCursor)]);
+    setTimeout(() => setFeedback(null), 3500);
+  } catch (e) {
+    setFeedback(`<i class="ti ti-circle-x me-1"></i>${escHtml(e.message)}`, "danger");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ── Saved filters ────────────────────────────────────────────
+
+async function loadSavedFilters() {
+  try {
+    const data = await fetchJSON("/api/support/saved-filters");
+    _savedFilters = data.filters || [];
+  } catch (e) {
+    _savedFilters = [];
+  }
+  renderSavedFilterOptions();
+}
+
+function renderSavedFilterOptions() {
+  const sel = document.getElementById("saved-filter-select");
+  sel.innerHTML = `<option value="">Saved filters…</option>` +
+    _savedFilters.map((f, i) => `<option value="${i}">${escHtml(f.name)}</option>`).join("");
+}
+
+function applySavedFilter(idx) {
+  const f = _savedFilters[idx];
+  if (!f) return;
+  document.getElementById("filter-status").value   = f.status   || "";
+  document.getElementById("filter-priority").value = f.priority || "";
+  document.getElementById("filter-tags").value     = f.tags     || "";
+  document.getElementById("filter-mine").checked   = !!f.mine;
+  applyFilters();
+}
+
+async function saveCurrentFilter() {
+  const name = prompt("Name this filter:");
+  if (!name || !name.trim()) return;
+  const entry = {
+    name:     name.trim(),
+    status:   document.getElementById("filter-status").value,
+    priority: document.getElementById("filter-priority").value,
+    tags:     document.getElementById("filter-tags").value.trim(),
+    mine:     document.getElementById("filter-mine").checked,
+  };
+  const next = [..._savedFilters, entry];
+  try {
+    const data = await fetchJSON("/api/support/saved-filters", {
+      method: "PUT",
+      body: JSON.stringify({ filters: next }),
+    });
+    _savedFilters = data.filters || next;
+    renderSavedFilterOptions();
+    setFeedback(`<i class="ti ti-check me-1"></i>Saved filter "${escHtml(entry.name)}"`, "success");
+    setTimeout(() => setFeedback(null), 2000);
+  } catch (e) {
+    setFeedback(`<i class="ti ti-circle-x me-1"></i>${escHtml(e.message)}`, "danger");
+  }
+}
+
+async function deleteSelectedSavedFilter() {
+  const sel = document.getElementById("saved-filter-select");
+  const idx = parseInt(sel.value, 10);
+  if (isNaN(idx)) return;
+  const next = _savedFilters.filter((_, i) => i !== idx);
+  try {
+    const data = await fetchJSON("/api/support/saved-filters", {
+      method: "PUT",
+      body: JSON.stringify({ filters: next }),
+    });
+    _savedFilters = data.filters || next;
+    renderSavedFilterOptions();
+  } catch (e) {
+    setFeedback(`<i class="ti ti-circle-x me-1"></i>${escHtml(e.message)}`, "danger");
   }
 }
 
 async function refresh() {
-  await loadCases();
+  _cursorStack   = [];
+  _currentCursor = null;
+  await Promise.all([loadStats(), loadTablePage(null)]);
 }
 
 function startAutoRefresh() {
   if (_refreshTimer) clearInterval(_refreshTimer);
-  _refreshTimer = setInterval(refresh, 2 * 60 * 1000); // every 2 minutes
+  _refreshTimer = setInterval(refresh, 2 * 60 * 1000);
 }
 
 async function checkMail() {
   const btn = document.getElementById("check-btn");
   btn.disabled = true;
-  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Checking…';
-  setFeedback('<i class="ti ti-refresh me-1"></i>Checking mail…', "info");
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Checking_…';
+  setFeedback('<i class="ti ti-refresh me-1"></i>Checking mail_…', "info");
   try {
     const r = await fetchJSON("/api/support/check-mail", { method: "POST" });
     setFeedback(
@@ -454,7 +764,55 @@ function quickReply(caseId) {
   window.location.href = `case_detail.html?id=${encodeURIComponent(caseId)}&reply=1`;
 }
 
-// ── Cross-channel search (point 6) ────────────────────────────────────────────
+// ── Assign to a teammate ─────────────────────────────
+
+async function loadTeamMembers() {
+  try {
+    const data = await fetchJSON("/api/support/users");
+    _teamMembers = data.users || [];
+  } catch (e) {
+    _teamMembers = [];
+  }
+  renderBulkAssigneeOptions();
+}
+
+async function assignCase(caseId, email) {
+  try {
+    const token = await getToken();
+    await fetch(API + `/api/support/cases/${caseId}`, {
+      method: "PATCH",
+      headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ assigned_to: email || null }),
+    });
+    setFeedback(`<i class="ti ti-check me-1"></i>${email ? "Assigned to " + escHtml(email) : "Unassigned"}`, "success");
+    await refresh();
+    setTimeout(() => setFeedback(null), 2500);
+  } catch (e) {
+    setFeedback(`<i class="ti ti-circle-x me-1"></i>${escHtml(e.message)}`, "danger");
+  }
+}
+
+function assignControl(c) {
+  const mine = !!c.assigned_to && c.assigned_to === CURRENT_USER_EMAIL;
+  const mineBtn = `
+    <button class="bb-quick-btn assign ${mine ? "active" : ""}"
+            title="${mine ? "Click to unassign from you" : "Assign this case to yourself"}"
+            onclick="assignCase('${c.id}', '${mine ? "" : CURRENT_USER_EMAIL}')">
+      <i class="ti ti-user-circle" style="font-size:.7rem"></i> ${mine ? "Mine" : "Assign to me"}
+    </button>`;
+  const others = _teamMembers.filter(u => u.email !== CURRENT_USER_EMAIL);
+  if (!others.length) return mineBtn;
+  const placeholder = (c.assigned_to && !mine) ? escHtml(c.assigned_to.split("@")[0]) : "Assign_…";
+  const dropdown = `
+    <select class="bb-quick-assign-select" title="Assign to a teammate"
+            onchange="if(this.value) assignCase('${c.id}', this.value); this.selectedIndex=0;">
+      <option value="">${placeholder}</option>
+      ${others.map(u => `<option value="${escHtml(u.email)}">${escHtml(u.email)}</option>`).join("")}
+    </select>`;
+  return mineBtn + dropdown;
+}
+
+// ── Cross-channel search (point 6) ────────────────────────
 
 let _searchDebounce = null;
 
@@ -489,7 +847,7 @@ async function runGlobalSearch(q) {
   }
 }
 
-// ── Admin-only "Channels" link (point 4) ──────────────────────────────────────
+// ── Admin-only "Channels" link (point 4) ────────────────────────
 
 async function checkAdminLink() {
   try {
@@ -498,7 +856,6 @@ async function checkAdminLink() {
       document.getElementById("channels-admin-link").classList.remove("d-none");
     }
   } catch (e) {
-    // Non-fatal — admin link just stays hidden.
   }
 }
 
@@ -511,7 +868,6 @@ async function initChannel() {
   if (!ACCOUNT && main) {
     ACCOUNT = main.account;
   }
-  // Keep the URL shareable/bookmarkable without forcing a reload.
   if (ACCOUNT) {
     const url = new URL(window.location.href);
     url.searchParams.set("account", ACCOUNT);
@@ -536,6 +892,8 @@ auth.onAuthStateChanged(async user => {
     setFeedback(`<i class="ti ti-circle-x me-1"></i>Could not load channels: ${escHtml(e.message)}`, "danger");
   }
   checkAdminLink();
+  await loadTeamMembers();
+  await loadSavedFilters();
   await refresh();
   startAutoRefresh();
 });
@@ -546,6 +904,24 @@ document.getElementById("search-input").addEventListener("input",  applyFilters)
 document.getElementById("filter-status").addEventListener("change", applyFilters);
 document.getElementById("filter-priority").addEventListener("change", applyFilters);
 document.getElementById("filter-mine").addEventListener("change", applyFilters);
+
+let _tagsDebounce = null;
+document.getElementById("filter-tags").addEventListener("input", () => {
+  clearTimeout(_tagsDebounce);
+  _tagsDebounce = setTimeout(applyFilters, 400);
+});
+
+document.getElementById("saved-filter-select").addEventListener("change", (e) => {
+  if (e.target.value !== "") applySavedFilter(parseInt(e.target.value, 10));
+});
+document.getElementById("save-filter-btn").onclick   = saveCurrentFilter;
+document.getElementById("delete-filter-btn").onclick = deleteSelectedSavedFilter;
+document.getElementById("export-btn").onclick        = exportCsv;
+document.getElementById("prev-page-btn").onclick      = goPrevPage;
+document.getElementById("next-page-btn").onclick      = goNextPage;
+document.getElementById("select-all-checkbox").addEventListener("change", (e) => toggleSelectAll(e.target.checked));
+document.getElementById("bulk-apply-btn").onclick = applyBulkAction;
+document.getElementById("bulk-clear-btn").onclick = clearSelection;
 
 const _globalSearchInput = document.getElementById("global-search-input");
 _globalSearchInput.addEventListener("input", () => {

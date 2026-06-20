@@ -25,12 +25,14 @@ CORS(app)
 
 # ── Register Blueprints ───────────────────────────────────────────────────────
 
-from handlers.cases      import bp as cases_bp
-from handlers.mail_check import bp as mail_check_bp
-from handlers.sla_check  import bp as sla_check_bp
-from handlers.channels   import bp as channels_bp
+from handlers.cases         import bp as cases_bp
+from handlers.mail_check    import bp as mail_check_bp
+from handlers.sla_check     import bp as sla_check_bp
+from handlers.channels      import bp as channels_bp
+from handlers.users         import bp as users_bp
+from handlers.saved_filters import bp as saved_filters_bp
 
-for bp in (cases_bp, mail_check_bp, sla_check_bp, channels_bp):
+for bp in (cases_bp, mail_check_bp, sla_check_bp, channels_bp, users_bp, saved_filters_bp):
     app.register_blueprint(bp)
 
 # ── Minimum role per blueprint for mutating requests ─────────────────────────

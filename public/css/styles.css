@@ -309,7 +309,7 @@
 }
 
 /* ── Quick action buttons in table rows ──────────────────────────────────── */
-.bb-quick-actions { display: flex; gap: .35rem; flex-wrap: nowrap; }
+.bb-quick-actions { display: flex; gap: .35rem; flex-wrap: wrap; }
 .bb-quick-btn {
   font-size: .72rem;
   padding: .2rem .55rem;
@@ -332,8 +332,48 @@
 .bb-quick-btn.transfer       { border-color: #a78bfa; color: #6d28d9; }
 .bb-quick-btn.transfer:hover { background: #f5f3ff; }
 .bb-quick-btn.transferred    { border-color: #d1d5db; color: #9ca3af; cursor: default; }
+.bb-quick-btn.assign         { border-color: #c7d2fe; color: #4338ca; }
+.bb-quick-btn.assign:hover   { background: #eef2ff; }
+.bb-quick-btn.assign.active  { background: var(--bb-indigo); border-color: var(--bb-indigo); color: #fff; }
+
+/* ── Compact "assign to teammate" picker inside a table row ─────────────── */
+.bb-quick-assign-select {
+  font-size: .72rem;
+  padding: .2rem .4rem;
+  border-radius: 20px;
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #6b7280;
+  max-width: 96px;
+}
+
+/* ── Assigned-to chip next to the case id ────────────────────────────────── */
+.bb-assigned-chip { background: #e0e7ff; color: #3730a3; }
 
 /* ── Reply template selector ─────────────────────────────────────────────── */
+/* ── Filter card, row 2 (tags / saved filters / export / pager) ─────────── */
+.bb-filter-row2 { border-top: 1px solid #f3f4f6; }
+
+/* ── Pagination controls ─────────────────────────────────────────────────── */
+.bb-pager { display: flex; gap: .35rem; }
+.bb-pager .btn { padding: .25rem .55rem; }
+
+/* ── Bulk action toolbar ──────────────────────────────────────────────────── */
+.bb-bulk-toolbar { border: 1px solid #ddd9ff; background: var(--bb-indigo-light); box-shadow: none; }
+.bb-bulk-toolbar .form-select { font-size: .8rem; }
+#bulk-count { color: var(--bb-indigo); }
+
+/* ── Tag chips (case detail header) ──────────────────────────────────────── */
+.bb-tag-chip {
+  display: inline-flex; align-items: center; gap: .3rem;
+  font-size: .7rem; font-weight: 500;
+  background: var(--bb-indigo-light); color: var(--bb-indigo);
+  border-radius: 20px; padding: .15em .5em .15em .65em;
+}
+.bb-tag-chip .ti-x { cursor: pointer; font-size: .75rem; }
+.bb-tag-chip .ti-x:hover { color: #dc2626; }
+.bb-tag-input { max-width: 130px; font-size: .8rem; padding: .2rem .55rem; display: inline-block; }
+
 /* ── Auto-refresh indicator ──────────────────────────────────────────────── */
 .bb-refresh-dot {
   display: inline-block;
